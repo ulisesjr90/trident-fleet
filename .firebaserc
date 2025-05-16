@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "trident-fleet-app-c5ec5",
+    "prod": "trident-fleet-app-ad0d5"
+  },
+  "targets": {},
+  "etags": {}
+}
