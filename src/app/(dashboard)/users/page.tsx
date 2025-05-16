@@ -110,8 +110,8 @@ function InviteUserModal({
     try {
       const success = await onInvite(email);
       if (success) {
-        setEmail('');
-        onClose();
+      setEmail('');
+      onClose();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to invite user');
