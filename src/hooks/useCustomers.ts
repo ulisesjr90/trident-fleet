@@ -34,14 +34,23 @@ export function useCustomers() {
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       try {
-        const customersData = await Promise.all(snapshot.docs.map(async doc => {
+        // Pre-fetch all vehicles once
+        const vehiclesRef = collection(db, 'vehicles');
+        const vehiclesSnapshot = await getDocs(vehiclesRef);
+        
+        // Create a map of customerId -> vehicle count
+        const vehicleCountMap = new Map<string, number>();
+        vehiclesSnapshot.forEach(doc => {
           const data = doc.data();
-          // Get assigned vehicles count
-          const vehiclesRef = collection(db, 'vehicles');
-          const vehiclesQuery = query(vehiclesRef, where('customerId', '==', doc.id));
-          const vehiclesSnapshot = await getDocs(vehiclesQuery);
-          const assignedVehicles = vehiclesSnapshot.size;
+          const customerId = data.customerId;
+          if (customerId) {
+            vehicleCountMap.set(customerId, (vehicleCountMap.get(customerId) || 0) + 1);
+          }
+        });
 
+        // Process customers with pre-computed vehicle counts
+        const customersData = snapshot.docs.map(doc => {
+          const data = doc.data();
           return {
             id: doc.id,
             name: data.name || 'Unnamed Customer',
@@ -49,11 +58,11 @@ export function useCustomers() {
             phone: data.phone || '',
             primaryOwnerId: data.primaryOwnerId || user.uid,
             additionalOwnerIds: data.additionalOwnerIds || [],
-            assignedVehicles,
+            assignedVehicles: vehicleCountMap.get(doc.id) || 0,
             createdAt: data.createdAt?.toDate() || new Date(),
             updatedAt: data.updatedAt?.toDate() || new Date()
           };
-        }));
+        });
 
         setCustomers(customersData);
         setError(null);

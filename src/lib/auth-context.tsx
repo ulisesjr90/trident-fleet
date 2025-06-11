@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
           console.error('AuthProvider: Error refreshing token:', error);
           // Clear invalid token
-          document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+          document.cookie = 'auth-token=; path=/; secure; samesite=lax; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         }
       } else {
         // Clear tokens when user is null

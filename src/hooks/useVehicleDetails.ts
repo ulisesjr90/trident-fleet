@@ -74,13 +74,11 @@ export function useVehicleDetails(vehicleId: string) {
       } : null);
       
       return true;
-    } catch (error) {
-      console.error('UpdateStatus - Error:', error);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
+} catch (error) {
+       console.error('UpdateStatus - Error:', error);
+       return false;
+     }
+   };
 
   const updateField = async (fieldName: string, value: string | number | null) => {
     if (!vehicle) return false;

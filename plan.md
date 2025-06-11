@@ -22,8 +22,8 @@ A comprehensive fleet management application for managing vehicles, customers, a
   - Warning: #F59E0B
   - Error: #EF4444
 - **Typography**
- typography.ts
- - **Spacing**
+  - typography.ts
+- **Spacing**
   - Base: 4px
   - Common: 8px, 16px, 24px, 32px
 - **Icons**

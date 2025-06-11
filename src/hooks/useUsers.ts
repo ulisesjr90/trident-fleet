@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, getDocs, addDoc, serverTimestamp, where, doc, setDoc } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, addDoc, serverTimestamp, where, doc, setDoc, limit } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 // import { setUserRole } from '@/lib/firebase-admin';
+
+const USERS_PER_PAGE = 50;
 
 export interface User {
   id: string;
@@ -22,11 +24,12 @@ export function useUsers() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
   const { toast } = useToast();
   const { user: currentUser, isAdmin } = useAuth();
 
   // Fetch users
-  const fetchUsers = async () => {
+  const fetchUsers = async (lastDoc?: any) => {
     try {
       setLoading(true);
       setError(null);
@@ -35,8 +38,19 @@ export function useUsers() {
       // For admins, fetch all users
       // For reps, only fetch other reps
       const q = isAdmin 
-        ? query(usersRef)  // No filters for admins, get all users
-        : query(usersRef, where('role', '==', 'rep'));  // Only reps for non-admins
+        ? query(
+            usersRef,
+            orderBy('invitedAt', 'desc'),
+            limit(USERS_PER_PAGE),
+            ...(lastDoc ? [where('invitedAt', '<', lastDoc.invitedAt)] : [])
+          )
+        : query(
+            usersRef,
+            where('role', '==', 'rep'),
+            orderBy('invitedAt', 'desc'),
+            limit(USERS_PER_PAGE),
+            ...(lastDoc ? [where('invitedAt', '<', lastDoc.invitedAt)] : [])
+          );
       
       const querySnapshot = await getDocs(q);
       
@@ -66,17 +80,8 @@ export function useUsers() {
         };
       });
       
-      // Sort users after fetching
-      const sortedUsers = usersData.sort((a, b) => {
-        // First sort by role (admins first)
-        if (a.role !== b.role) {
-          return a.role === 'admin' ? -1 : 1;
-        }
-        // Then sort by invitedAt
-        return (b.invitedAt?.getTime() || 0) - (a.invitedAt?.getTime() || 0);
-      });
-      
-      setUsers(sortedUsers);
+      setUsers(prev => lastDoc ? [...prev, ...usersData] : usersData);
+      setHasMore(querySnapshot.docs.length === USERS_PER_PAGE);
     } catch (err) {
       console.error('Error fetching users:', err);
       setError('Failed to fetch users. Please try again.');
@@ -87,6 +92,14 @@ export function useUsers() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMore = async () => {
+    if (!hasMore || loading) return;
+    const lastUser = users[users.length - 1];
+    if (lastUser) {
+      await fetchUsers(lastUser);
     }
   };
 
@@ -194,16 +207,16 @@ export function useUsers() {
 
   // Initial fetch
   useEffect(() => {
-    if (currentUser) {
     fetchUsers();
-    }
-  }, [currentUser, isAdmin]);
+  }, [isAdmin]);
 
   return {
     users,
     loading,
     error,
+    hasMore,
+    loadMore,
     inviteUser,
-    refreshUsers: fetchUsers
+    refreshUsers: () => fetchUsers()
   };
 } 

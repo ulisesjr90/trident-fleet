@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, MoreHorizontal, ChevronUp, ChevronDown, Filter, X, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { AddCustomerModal } from '@/components/customers/AddCustomerModal';
+import { CustomerFilterModal } from '@/components/customers/CustomerFilterModal';
 import { useCustomers } from '@/hooks/useCustomers';
 import { useCustomerOperations } from '@/hooks/useCustomerOperations';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -169,91 +170,21 @@ export default function CustomersPage() {
         </PageHeader>
       }
     >
-      {/* Filter Modal */}
-      {showFilterModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-900 rounded-lg p-6 w-full max-w-md mx-4 shadow-lg">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className={getTypographyClass('header')}>Filter Customers</h2>
-              <Button
-                variant="ghost"
-                onClick={() => setShowFilterModal(false)}
-                className="h-8 w-8 p-0"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            {/* Filter Section */}
-            <div className="mb-6">
-              <h3 className={getTypographyClass('body')}>Filter By</h3>
-              <div className="space-y-4 mt-2">
-                {/* Vehicle Count Filter */}
-                <div>
-                  <label className={getTypographyClass('body')}>Vehicles</label>
-                  <div className="flex gap-2 mt-1">
-                    <Button
-                      variant={filters.vehicleCount === 'with' ? 'default' : 'outline'}
-                      onClick={() => handleFilterChange('vehicleCount', filters.vehicleCount === 'with' ? undefined : 'with')}
-                      className="flex-1"
-                    >
-                      <span className={getTypographyClass('body')}>With Vehicles</span>
-                    </Button>
-                    <Button
-                      variant={filters.vehicleCount === 'without' ? 'default' : 'outline'}
-                      onClick={() => handleFilterChange('vehicleCount', filters.vehicleCount === 'without' ? undefined : 'without')}
-                      className="flex-1"
-                    >
-                      <span className={getTypographyClass('body')}>Without Vehicles</span>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Sort Section */}
-            <div className="mb-6">
-              <h3 className={getTypographyClass('body')}>Sort By</h3>
-              <div className="space-y-2 mt-2">
-                {(['name', 'email', 'createdAt'] as const).map((field) => (
-                  <Button
-                    key={field}
-                    variant={sortField === field ? 'default' : 'outline'}
-                    onClick={() => handleSort(field)}
-                    className="w-full justify-between"
-                  >
-                    <span className={getTypographyClass('body')}>
-                      {field === 'createdAt' ? 'Created' :
-                       field.charAt(0).toUpperCase() + field.slice(1)}
-                    </span>
-                    <SortIcon field={field} />
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Filter Actions */}
-            <div className="flex justify-end gap-2 mt-6">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSortField('name');
-                  setSortDirection('asc');
-                  setFilters({});
-                  setActiveFilters(0);
-                }}
-              >
-                <span className={getTypographyClass('body')}>Reset</span>
-              </Button>
-              <Button
-                onClick={() => setShowFilterModal(false)}
-              >
-                <span className={getTypographyClass('body')}>Apply</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CustomerFilterModal
+        isOpen={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        sortField={sortField}
+        sortDirection={sortDirection}
+        filters={filters}
+        onSort={handleSort}
+        onFilterChange={handleFilterChange}
+        onReset={() => {
+          setSortField('name');
+          setSortDirection('asc');
+          setFilters({});
+          setActiveFilters(0);
+        }}
+      />
 
       {/* Desktop View - Data Table */}
       <div className="hidden md:block">
@@ -369,18 +300,10 @@ export default function CustomersPage() {
                   <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                     <span>{customer.phone}</span>
                     {customer.assignedVehicles > 0 && (
-                      <>
-                    <span>•</span>
-                        <Badge variant="default" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                          {customer.assignedVehicles} vehicle{customer.assignedVehicles !== 1 ? 's' : ''}
-                        </Badge>
-                      </>
+                      <Badge variant="default" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                        {customer.assignedVehicles} vehicle{customer.assignedVehicles !== 1 ? 's' : ''}
+                      </Badge>
                     )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                    Created {customer.createdAt.toLocaleDateString()}
-                    </span>
                   </div>
                 </div>
                 <Button 
@@ -400,11 +323,13 @@ export default function CustomersPage() {
         ))}
       </div>
 
-      <AddCustomerModal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onSuccess={handleAddSuccess}
-      />
+      {showAddModal && (
+        <AddCustomerModal
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={handleAddSuccess}
+        />
+      )}
     </PageLayout>
   );
 } 

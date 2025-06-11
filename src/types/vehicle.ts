@@ -55,8 +55,8 @@ export interface Vehicle {
   archiveReason?: string;
   mvaNumber?: string;
   returnDate?: Timestamp;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
   currentAssignment?: {
     customer: {
       id: string;

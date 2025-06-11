@@ -1,9 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAuth } from 'firebase-admin/auth';
-import { initializeAdminApp } from '@/lib/firebase-admin-config';
-
-// Ensure admin app is initialized
-initializeAdminApp();
+import { adminAuth } from '@/lib/firebase-admin';
 
 export async function POST(request: Request) {
   try {
@@ -21,8 +17,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
-    const adminAuth = getAuth();
     
     try {
       await adminAuth.setCustomUserClaims(uid, { role });

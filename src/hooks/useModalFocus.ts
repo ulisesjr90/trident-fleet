@@ -10,9 +10,15 @@ export function useModalFocus(isOpen: boolean) {
     const previousFocus = document.activeElement as HTMLElement;
 
     // Focus the modal
-    if (modalRef.current) {
-      modalRef.current.focus();
-    }
+if (modalRef.current) {
+  // Ensure the element is programmatically focusable
+  if (modalRef.current.tabIndex === -1 || modalRef.current.tabIndex === 0) {
+    modalRef.current.focus();
+  } else {
+    modalRef.current.setAttribute('tabIndex', '-1');
+    modalRef.current.focus();
+  }
+}
 
     // Lock focus within the modal
     const handleFocus = (e: FocusEvent) => {

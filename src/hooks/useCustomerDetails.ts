@@ -29,20 +29,17 @@ export function useCustomerDetails(customerId: string) {
           return;
         }
 
-        const customerRef = doc(db, 'customers', customerId);
-        const customerDoc = await getDoc(customerRef);
-
-        if (customerDoc.exists()) {
-          // Get assigned vehicles from vehicles collection
-          const vehiclesRef = collection(db, 'vehicles');
-          const vehiclesQuery = query(
-            vehiclesRef, 
+        // Fetch customer and vehicles in parallel
+        const [customerDoc, vehiclesSnapshot] = await Promise.all([
+          getDoc(doc(db, 'customers', customerId)),
+          getDocs(query(
+            collection(db, 'vehicles'),
             where('customerId', '==', customerId),
             where('status', '==', VehicleStatus.WithCustomer)
-          );
-          const vehiclesSnapshot = await getDocs(vehiclesQuery);
-          
-          // Get the customer data
+          ))
+        ]);
+
+        if (customerDoc.exists()) {
           const customerData = customerDoc.data();
           
           // Get unique vehicles from the customer's vehicles array

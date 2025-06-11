@@ -102,14 +102,14 @@ service cloud.firestore {
 
     // Vehicles collection
     match /vehicles/{vehicleId} {
-      // Both authenticated users can read vehicles
-      allow read: if request.auth != null;
-      
-      // Both authenticated users can create vehicles
-      allow create: if request.auth != null;
-      
-      // Both authenticated users can update vehicles
-      allow update: if request.auth != null;
+      // All authenticated users can read vehicles
+      allow read: if isAuthenticated();
+       
+      // Only admins and reps can create vehicles
+      allow create: if isAuthenticated() && (isAdmin() || isRep());
+       
+      // Only admins and reps can update vehicles
+      allow update: if isAuthenticated() && (isAdmin() || isRep());
       
       // Only admins can delete vehicles
       allow delete: if request.auth.token.role == 'admin';
