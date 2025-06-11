@@ -1,50 +1,44 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { VehicleStatus } from '@/components/vehicles/VehicleCard';
-
-export interface Vehicle {
-  id: string;
-  name: string;
-  status: VehicleStatus;
-  mileage: number;
-  lastServiceDate?: string;
-  currentCustomerId?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { auth } from '@/lib/firebase';
+import { Vehicle } from '@/types/vehicle';
+import { useAuth } from '@/hooks/useAuth';
 
 export function useVehicles() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
-    const vehiclesRef = collection(db, 'vehicles');
-    const q = query(vehiclesRef, orderBy('createdAt', 'desc'));
+    const fetchVehicles = async () => {
+      try {
+        if (!user) {
+          setVehicles([]);
+          setLoading(false);
+          return;
+        }
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const vehiclesData = snapshot.docs.map((doc) => ({
+        const vehiclesRef = collection(db, 'vehicles');
+        // Fetch all vehicles for all users
+        const q = query(vehiclesRef);
+        const querySnapshot = await getDocs(q);
+        const vehiclesData = querySnapshot.docs.map(doc => ({
           id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate(),
-          updatedAt: doc.data().updatedAt?.toDate(),
+          ...doc.data()
         })) as Vehicle[];
-
         setVehicles(vehiclesData);
-        setIsLoading(false);
-      },
-      (error) => {
-        console.error('Error fetching vehicles:', error);
-        setError(error as Error);
-        setIsLoading(false);
+      } catch (err) {
+        console.error('Error fetching vehicles:', err);
+        setError(err instanceof Error ? err : new Error('Failed to fetch vehicles'));
+      } finally {
+        setLoading(false);
       }
-    );
+    };
 
-    return () => unsubscribe();
-  }, []);
+    fetchVehicles();
+  }, [user]);
 
-  return { vehicles, isLoading, error };
+  return { vehicles, loading, error };
 } 

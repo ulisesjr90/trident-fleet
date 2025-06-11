@@ -1,103 +1,49 @@
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-
-export interface HistoryItem {
-  id: string;
-  type: 'update' | 'share' | 'vehicle' | 'note';
-  description: string;
-  timestamp: Date;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-  };
-}
+import { auth } from '@/lib/firebase';
+import { CustomerHistory } from '@/types/customer';
 
 export function useCustomerHistory(customerId: string) {
-  const { data: session } = useSession();
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [history, setHistory] = useState<CustomerHistory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const fetchHistory = async () => {
-      if (!session?.user?.id || !customerId) {
-        setLoading(false);
-        return;
-      }
-
+    const fetchCustomerHistory = async () => {
       try {
+        const user = auth.currentUser;
+        if (!user) {
+          setHistory([]);
+          setLoading(false);
+          return;
+        }
+
         const historyRef = collection(db, 'customerHistory');
         const q = query(
           historyRef,
           where('customerId', '==', customerId),
           orderBy('timestamp', 'desc')
         );
-
+        
         const querySnapshot = await getDocs(q);
         const historyData = querySnapshot.docs.map(doc => ({
           id: doc.id,
-          ...doc.data(),
-          timestamp: doc.data().timestamp.toDate()
-        })) as HistoryItem[];
+          ...doc.data()
+        })) as CustomerHistory[];
 
         setHistory(historyData);
       } catch (err) {
-        console.error('Error fetching customer history:', err);
-        setError('Failed to load history');
+        setError(err instanceof Error ? err : new Error('Failed to fetch customer history'));
       } finally {
         setLoading(false);
       }
     };
 
-    fetchHistory();
-  }, [customerId, session?.user?.id]);
-
-  const addHistoryItem = async (type: HistoryItem['type'], description: string) => {
-    if (!session?.user?.id || !session?.user?.name || !session?.user?.email || !customerId) {
-      throw new Error('Missing required user data or customer ID');
+    if (customerId) {
+      fetchCustomerHistory();
     }
+  }, [customerId]);
 
-    try {
-      const historyRef = collection(db, 'customerHistory');
-      await addDoc(historyRef, {
-        customerId,
-        type,
-        description,
-        timestamp: serverTimestamp(),
-        user: {
-          id: session.user.id,
-          name: session.user.name,
-          email: session.user.email
-        }
-      });
-
-      // Refresh history
-      const q = query(
-        historyRef,
-        where('customerId', '==', customerId),
-        orderBy('timestamp', 'desc')
-      );
-      const querySnapshot = await getDocs(q);
-      const historyData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp.toDate()
-      })) as HistoryItem[];
-
-      setHistory(historyData);
-    } catch (err) {
-      console.error('Error adding history item:', err);
-      throw new Error('Failed to add history item');
-    }
-  };
-
-  return {
-    history,
-    loading,
-    error,
-    addHistoryItem
-  };
+  return { history, loading, error };
 } 

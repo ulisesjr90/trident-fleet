@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { auth } from '@/lib/firebase';
 import { Customer } from '@/types/customer';
+import { VehicleStatus } from '@/types/vehicle';
 
 interface EditableField {
   name: string;
@@ -12,46 +13,93 @@ interface EditableField {
 }
 
 export function useCustomerDetails(customerId: string) {
-  const { data: session } = useSession();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   const [editableFields, setEditableFields] = useState<EditableField[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const fetchCustomer = async () => {
-      if (!session?.user?.id) return;
-
+    const fetchCustomerDetails = async () => {
       try {
-        const customerRef = doc(db, 'customers', customerId);
-        const customerSnap = await getDoc(customerRef);
-
-        if (!customerSnap.exists()) {
-          setError('Customer not found');
+        const user = auth.currentUser;
+        if (!user) {
+          setCustomer(null);
+          setLoading(false);
           return;
         }
 
-        const customerData = customerSnap.data() as Customer;
-        setCustomer(customerData);
-        
-        setEditableFields([
-          { name: 'name', value: customerData.name, isEditing: false },
-          { name: 'email', value: customerData.email, isEditing: false },
-          { name: 'phone', value: customerData.phone || '', isEditing: false }
-        ]);
+        const customerRef = doc(db, 'customers', customerId);
+        const customerDoc = await getDoc(customerRef);
+
+        if (customerDoc.exists()) {
+          // Get assigned vehicles from vehicles collection
+          const vehiclesRef = collection(db, 'vehicles');
+          const vehiclesQuery = query(
+            vehiclesRef, 
+            where('customerId', '==', customerId),
+            where('status', '==', VehicleStatus.WithCustomer)
+          );
+          const vehiclesSnapshot = await getDocs(vehiclesQuery);
+          
+          // Get the customer data
+          const customerData = customerDoc.data();
+          
+          // Get unique vehicles from the customer's vehicles array
+          const uniqueVehicles = new Map();
+          customerData.vehicles?.forEach((vehicle: any) => {
+            if (!uniqueVehicles.has(vehicle.id)) {
+              uniqueVehicles.set(vehicle.id, vehicle);
+            }
+          });
+
+          // Map the vehicles from the vehicles collection
+          const assignedVehicles = vehiclesSnapshot.docs.map(doc => {
+            const vehicleData = doc.data();
+            return {
+              id: doc.id,
+              vehicleDescriptor: vehicleData.vehicleDescriptor,
+              assignedAt: vehicleData.updatedAt,
+              assignedBy: {
+                id: user.uid,
+                name: user.displayName || 'Unknown User'
+              },
+              status: VehicleStatus.WithCustomer
+            };
+          });
+
+          // Merge unique vehicles from both sources
+          const mergedVehicles = Array.from(uniqueVehicles.values());
+          const finalVehicles = [...mergedVehicles, ...assignedVehicles].filter((vehicle, index, self) =>
+            index === self.findIndex((v) => v.id === vehicle.id)
+          );
+
+          setCustomer({ 
+            id: customerDoc.id, 
+            ...customerData,
+            vehicles: finalVehicles,
+            assignedVehicles: finalVehicles.length
+          } as Customer);
+          
+          setEditableFields([
+            { name: 'name', value: customerData?.name || '', isEditing: false },
+            { name: 'email', value: customerData?.email || '', isEditing: false },
+            { name: 'phone', value: customerData?.phone || '', isEditing: false }
+          ]);
+        } else {
+          setCustomer(null);
+        }
       } catch (err) {
-        console.error('Error fetching customer:', err);
-        setError('Failed to load customer details');
+        setError(err instanceof Error ? err : new Error('Failed to fetch customer details'));
       } finally {
         setLoading(false);
       }
     };
 
-    if (session?.user?.id) {
-      fetchCustomer();
+    if (customerId) {
+      fetchCustomerDetails();
     }
-  }, [customerId, session?.user?.id]);
+  }, [customerId]);
 
   const validateField = (fieldName: string, value: string): string | undefined => {
     if (fieldName === 'name' && !value.trim()) {
@@ -96,7 +144,7 @@ export function useCustomerDetails(customerId: string) {
 
     try {
       setIsSaving(true);
-      const customerRef = doc(db, 'customers', customerId);
+      const customerRef = doc(db, 'customers', customer.id);
       await updateDoc(customerRef, {
         [fieldName]: value,
         updatedAt: new Date()
@@ -113,7 +161,7 @@ export function useCustomerDetails(customerId: string) {
       return true;
     } catch (err) {
       console.error('Error updating customer:', err);
-      setError('Failed to update customer');
+      setError(err instanceof Error ? err : new Error('Failed to update customer'));
       return false;
     } finally {
       setIsSaving(false);
@@ -125,12 +173,12 @@ export function useCustomerDetails(customerId: string) {
     
     try {
       setIsSaving(true);
-      const customerRef = doc(db, 'customers', customerId);
+      const customerRef = doc(db, 'customers', customer.id);
       await deleteDoc(customerRef);
       return true;
     } catch (err) {
       console.error('Error deleting customer:', err);
-      setError('Failed to delete customer');
+      setError(err instanceof Error ? err : new Error('Failed to delete customer'));
       return false;
     } finally {
       setIsSaving(false);
@@ -143,7 +191,7 @@ export function useCustomerDetails(customerId: string) {
     error,
     editableFields,
     isSaving,
-    isOwner: customer?.primaryOwnerId === session?.user?.id,
+    isOwner: customer?.primaryOwnerId === auth.currentUser?.uid,
     updateField,
     deleteCustomer,
     formatPhoneNumber,

@@ -1,42 +1,30 @@
 import { ReactNode } from 'react';
-import { cn } from '@/lib/utils';
+import { getTypographyClass } from '@/lib/typography';
 
-export interface CardProps {
+interface CardProps {
+  title?: string;
   children: ReactNode;
-  className?: string;
-  onClick?: () => void;
-  isLoading?: boolean;
   error?: string;
+  className?: string;
 }
 
-export function Card({ children, className, onClick, isLoading, error }: CardProps) {
+export function Card({ title, children, error, className = '' }: CardProps) {
   return (
-    <div
-      className={cn(
-        'bg-white dark:bg-[#1f2937] rounded-lg shadow-sm border border-gray-200 dark:border-gray-700',
-        'transition-all duration-200 ease-in-out',
-        'hover:shadow-md dark:hover:shadow-gray-900/20',
-        'active:scale-[0.98]',
-        'touch-manipulation',
-        onClick && 'cursor-pointer',
-        className
-      )}
-      onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-    >
-      {isLoading ? (
-        <div className="p-4 animate-pulse">
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-4" />
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow ${className}`}>
+      {title && (
+        <div className="px-4 py-5 sm:px-6">
+          <h3 className={getTypographyClass('header')}>{title}</h3>
         </div>
-      ) : error ? (
-        <div className="p-4 text-red-500 dark:text-red-400 text-sm">
+      )}
+      <div className="px-4 py-5 sm:p-6">
+        {error ? (
+          <div className={getTypographyClass('body')}>
           {error}
         </div>
       ) : (
         children
       )}
+      </div>
     </div>
   );
 } 

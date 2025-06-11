@@ -1,305 +1,410 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { collection, query, where, getDocs, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { CustomerCard } from '@/components/customers/CustomerCard';
-import { Button } from '@/components/ui/Button';
-import { Plus, Users, Share2, Trash2 } from 'lucide-react';
-import { Toast, ToastType } from '@/components/ui/Toast';
 import { useRouter } from 'next/navigation';
+import { Plus, MoreHorizontal, ChevronUp, ChevronDown, Filter, X, Pencil, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { AddCustomerModal } from '@/components/customers/AddCustomerModal';
-import { ShareCustomerModal } from '@/components/customers/ShareCustomerModal';
-import { MobileLayout } from '@/components/layout/MobileLayout';
+import { useCustomers } from '@/hooks/useCustomers';
+import { useCustomerOperations } from '@/hooks/useCustomerOperations';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { getTypographyClass } from '@/lib/typography';
+import { DataTable, DataTableHeader, DataTableBody, DataTableRow, DataTableCell, DataTableHeaderCell } from '@/components/ui/DataTable';
+import { Customer } from '@/types/customer';
+import { Badge } from '@/components/ui/Badge';
+import { DropdownMenu } from "@/components/ui/DropdownMenu";
+import { DropdownMenuItem } from "@/components/ui/DropdownMenuItem";
+import { PageLayout } from '@/components/layout/PageLayout';
+import { toast } from 'sonner';
 
-interface Customer {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  assignedVehicles?: number;
-  primaryOwnerId: string;
-}
+type SortField = 'name' | 'email' | 'createdAt';
+type SortDirection = 'asc' | 'desc';
+type FilterField = 'vehicleCount';
 
 export default function CustomersPage() {
-  const { data: session, status } = useSession();
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState<ToastType>('error');
-  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const router = useRouter();
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const { customers, loading: isLoading, error } = useCustomers();
+  const { deleteCustomer } = useCustomerOperations();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [activeFilters, setActiveFilters] = useState(0);
+  const [filters, setFilters] = useState<{
+    vehicleCount?: 'with' | 'without';
+  }>({});
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('Session:', session);
-    console.log('Status:', status);
-    console.log('Loading:', loading);
-    console.log('Customers:', customers);
-  }, [session, status, loading, customers]);
+  const handleAddSuccess = () => {
+    setShowAddModal(false);
+  };
 
-  // Fetch customers when session is ready
-  useEffect(() => {
-    const fetchCustomers = async () => {
-      if (!session?.user?.id) {
-        setLoading(false);
-        return;
+  const handleSort = (field: SortField) => {
+    if (field === sortField) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const filteredAndSortedCustomers = customers
+    .filter(customer => {
+      if (filters.vehicleCount) {
+        const hasVehicles = typeof customer.assignedVehicles === 'number' && customer.assignedVehicles > 0;
+        if (filters.vehicleCount === 'with' && !hasVehicles) return false;
+        if (filters.vehicleCount === 'without' && hasVehicles) return false;
       }
+      return true;
+    })
+    .sort((a, b) => {
+    const direction = sortDirection === 'asc' ? 1 : -1;
+    switch (sortField) {
+      case 'name':
+        return direction * a.name.localeCompare(b.name);
+      case 'email':
+        return direction * a.email.localeCompare(b.email);
+      case 'createdAt':
+        return direction * (a.createdAt.getTime() - b.createdAt.getTime());
+      default:
+        return 0;
+    }
+  });
 
+  const handleFilterChange = (field: FilterField, value: 'with' | 'without' | undefined) => {
+    setFilters(prev => {
+      const newFilters = { ...prev };
+      if (value === undefined) {
+        delete newFilters[field];
+      } else if (field === 'vehicleCount') {
+        newFilters.vehicleCount = value;
+      }
+      return newFilters;
+    });
+  };
+
+  useEffect(() => {
+    setActiveFilters(Object.keys(filters).length);
+  }, [filters]);
+
+  const handleEdit = (customer: Customer) => {
+    router.push(`/customers/${customer.id}/edit`);
+  };
+
+  const handleDelete = async (customer: Customer) => {
+    if (window.confirm(`Are you sure you want to delete ${customer.name}?`)) {
+      setIsDeleting(true);
       try {
-        setLoading(true);
-        const customersRef = collection(db, 'customers');
-        const q = query(customersRef, where('primaryOwnerId', '==', session.user.id));
-        const snapshot = await getDocs(q);
-        const customersData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Customer[];
-        
-        setCustomers(customersData);
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching customers:', err);
-        setError('Failed to load customers');
-        showErrorToast('Failed to load customers');
+        await deleteCustomer(customer.id);
+        toast.success('Customer deleted successfully');
+      } catch (error) {
+        console.error('Error deleting customer:', error);
+        toast.error('Failed to delete customer');
       } finally {
-        setLoading(false);
+        setIsDeleting(false);
       }
-    };
-
-    if (status === 'authenticated') {
-      fetchCustomers();
-    } else if (status === 'unauthenticated') {
-      router.push('/');
-    }
-  }, [status, session?.user?.id]);
-
-  const handleAddCustomer = () => {
-    if (!session?.user?.id) {
-      showErrorToast('Please sign in to add customers');
-      return;
-    }
-    setShowAddCustomerModal(true);
-  };
-
-  const handleCustomerClick = (customer: Customer) => {
-    router.push(`/customers/${customer.id}`);
-  };
-
-  const handleShareCustomer = (customer: Customer) => {
-    setSelectedCustomer(customer);
-    setShowShareModal(true);
-  };
-
-  const handleDeleteCustomer = async (customer: Customer) => {
-    if (!session?.user?.id) {
-      showErrorToast('Please sign in to delete customers');
-      return;
-    }
-
-    if (customer.primaryOwnerId !== session.user.id) {
-      showErrorToast('You can only delete customers you own');
-      return;
-    }
-
-    if (customer.assignedVehicles && customer.assignedVehicles > 0) {
-      showErrorToast('Cannot delete customer with assigned vehicles');
-      return;
-    }
-
-    if (!confirm(`Are you sure you want to delete ${customer.name}?`)) {
-      return;
-    }
-
-    try {
-      const customerRef = doc(db, 'customers', customer.id);
-      await deleteDoc(customerRef);
-      
-      setCustomers(customers.filter(c => c.id !== customer.id));
-      showSuccessToast('Customer deleted successfully');
-    } catch (err) {
-      console.error('Error deleting customer:', err);
-      showErrorToast('Failed to delete customer');
     }
   };
 
-  const showErrorToast = (message: string) => {
-    setToastMessage(message);
-    setToastType('error');
-    setShowToast(true);
-  };
-
-  const showSuccessToast = (message: string) => {
-    setToastMessage(message);
-    setToastType('success');
-    setShowToast(true);
-  };
-
-  if (status === 'loading') {
+  if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
+      <PageLayout title="Customers">
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <LoadingSpinner size="lg" />
       </div>
+      </PageLayout>
     );
   }
 
+  if (error) {
+    return (
+      <PageLayout title="Customers">
+      <div className="p-4 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg">
+        <p className={getTypographyClass('body')}>
+          Error loading customers: {error instanceof Error ? error.message : String(error)}
+        </p>
+      </div>
+      </PageLayout>
+    );
+  }
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (field !== sortField) return null;
+    return sortDirection === 'asc' ? (
+      <ChevronUp className="h-4 w-4 ml-1" />
+    ) : (
+      <ChevronDown className="h-4 w-4 ml-1" />
+    );
+  };
+
   return (
-    <MobileLayout
-      header={{ title: 'Customers', showBackButton: false }}
-      userRole={session?.user?.role}
-      currentPath="/customers"
+    <PageLayout 
+      title="Customers"
+      headerContent={
+        <PageHeader>
+          <div className="flex flex-wrap gap-2">
+            <Button 
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              <span className={getTypographyClass('body')}>Add Customer</span>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowFilterModal(true)}
+              className="flex items-center gap-2"
+            >
+              <Filter className="h-4 w-4" />
+              <span className={getTypographyClass('body')}>Filter</span>
+              {activeFilters > 0 && (
+                <Badge variant="default" className="ml-1">
+                  {activeFilters}
+                </Badge>
+              )}
+            </Button>
+          </div>
+        </PageHeader>
+      }
     >
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Customers</h1>
-          <Button onClick={handleAddCustomer}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Customer
-          </Button>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-          </div>
-        )}
-
-        {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
-          </div>
-        ) : customers.length === 0 ? (
-          <div className="text-center py-12 px-4">
-            <div className="max-w-md mx-auto">
-              <div className="mb-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 mb-4">
-                  <Users className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+      {/* Filter Modal */}
+      {showFilterModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-900 rounded-lg p-6 w-full max-w-md mx-4 shadow-lg">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className={getTypographyClass('header')}>Filter Customers</h2>
+              <Button
+                variant="ghost"
+                onClick={() => setShowFilterModal(false)}
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            {/* Filter Section */}
+            <div className="mb-6">
+              <h3 className={getTypographyClass('body')}>Filter By</h3>
+              <div className="space-y-4 mt-2">
+                {/* Vehicle Count Filter */}
+                <div>
+                  <label className={getTypographyClass('body')}>Vehicles</label>
+                  <div className="flex gap-2 mt-1">
+                    <Button
+                      variant={filters.vehicleCount === 'with' ? 'default' : 'outline'}
+                      onClick={() => handleFilterChange('vehicleCount', filters.vehicleCount === 'with' ? undefined : 'with')}
+                      className="flex-1"
+                    >
+                      <span className={getTypographyClass('body')}>With Vehicles</span>
+                    </Button>
+                    <Button
+                      variant={filters.vehicleCount === 'without' ? 'default' : 'outline'}
+                      onClick={() => handleFilterChange('vehicleCount', filters.vehicleCount === 'without' ? undefined : 'without')}
+                      className="flex-1"
+                    >
+                      <span className={getTypographyClass('body')}>Without Vehicles</span>
+                    </Button>
+                  </div>
                 </div>
-                <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">No Customers Yet</h2>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Start managing your customer relationships by adding your first customer. Here's how:
-                </p>
               </div>
-
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-8">
-                <ol className="text-left space-y-6">
-                  <li className="flex items-start">
-                    <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full mr-4">1</span>
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-medium text-gray-900 dark:text-white">Add a New Customer</span>
-                        <Button>
-                          <Plus className="w-4 h-4 mr-2" />
-                          Add Customer
-                        </Button>
-                      </div>
-                      <p className="text-gray-600 dark:text-gray-400">Click the button in the top right corner to start</p>
-                    </div>
-                  </li>
-
-                  <li className="flex items-start">
-                    <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full mr-4">2</span>
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-medium text-gray-900 dark:text-white">Enter Customer Details</span>
-                        <div className="flex gap-2">
-                          <div className="px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm text-gray-600 dark:text-gray-300">Name</div>
-                          <div className="px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm text-gray-600 dark:text-gray-300">Email</div>
-                          <div className="px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm text-gray-600 dark:text-gray-300">Phone</div>
-                        </div>
-                      </div>
-                      <p className="text-gray-600 dark:text-gray-400">Fill in the customer's basic information</p>
-                    </div>
-                  </li>
-
-                  <li className="flex items-start">
-                    <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full mr-4">3</span>
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-medium text-gray-900 dark:text-white">Share with Team</span>
-                        <Button variant="accent">
-                          <Share2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      <p className="text-gray-600 dark:text-gray-400">Share customers with team members so they can check vehicles in and out</p>
-                    </div>
-                  </li>
-
-                  <li className="flex items-start">
-                    <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full mr-4">4</span>
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-medium text-gray-900 dark:text-white">Manage Customers</span>
-                        <Button variant="danger">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      <p className="text-gray-600 dark:text-gray-400">Click the trash icon to delete a customer (only if they have no assigned vehicles)</p>
-                    </div>
-                  </li>
-                </ol>
+            </div>
+            
+            {/* Sort Section */}
+            <div className="mb-6">
+              <h3 className={getTypographyClass('body')}>Sort By</h3>
+              <div className="space-y-2 mt-2">
+                {(['name', 'email', 'createdAt'] as const).map((field) => (
+                  <Button
+                    key={field}
+                    variant={sortField === field ? 'default' : 'outline'}
+                    onClick={() => handleSort(field)}
+                    className="w-full justify-between"
+                  >
+                    <span className={getTypographyClass('body')}>
+                      {field === 'createdAt' ? 'Created' :
+                       field.charAt(0).toUpperCase() + field.slice(1)}
+                    </span>
+                    <SortIcon field={field} />
+                  </Button>
+                ))}
               </div>
+            </div>
 
-              <Button onClick={handleAddCustomer}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Your First Customer
+            {/* Filter Actions */}
+            <div className="flex justify-end gap-2 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSortField('name');
+                  setSortDirection('asc');
+                  setFilters({});
+                  setActiveFilters(0);
+                }}
+              >
+                <span className={getTypographyClass('body')}>Reset</span>
+              </Button>
+              <Button
+                onClick={() => setShowFilterModal(false)}
+              >
+                <span className={getTypographyClass('body')}>Apply</span>
               </Button>
             </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {customers.map((customer) => (
-              <CustomerCard
-                key={customer.id}
-                customer={customer}
-                onClick={() => handleCustomerClick(customer)}
-                onShare={() => handleShareCustomer(customer)}
-                onDelete={() => handleDeleteCustomer(customer)}
-                isOwner={customer.primaryOwnerId === session?.user?.id}
-              />
-            ))}
-          </div>
-        )}
+        </div>
+      )}
 
-        {showToast && (
-          <Toast
-            message={toastMessage}
-            type={toastType}
-            onClose={() => setShowToast(false)}
-          />
-        )}
-
-        {showAddCustomerModal && (
-          <AddCustomerModal
-            onClose={() => setShowAddCustomerModal(false)}
-            onSuccess={(customer) => {
-              setCustomers([...customers, customer]);
-              showSuccessToast('Customer added successfully');
-              setShowAddCustomerModal(false);
-            }}
-          />
-        )}
-
-        {showShareModal && selectedCustomer && (
-          <ShareCustomerModal
-            customer={selectedCustomer}
-            onClose={() => {
-              setShowShareModal(false);
-              setSelectedCustomer(null);
-            }}
-            onSuccess={() => {
-              showSuccessToast('Customer shared successfully');
-              setShowShareModal(false);
-              setSelectedCustomer(null);
-            }}
-          />
-        )}
+      {/* Desktop View - Data Table */}
+      <div className="hidden md:block">
+        <DataTable>
+            <DataTableHeader>
+              <tr>
+                <DataTableHeaderCell>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort('name')}
+                    className="flex items-center"
+                  >
+                    <span className={getTypographyClass('body')}>Name</span>
+                    <SortIcon field="name" />
+                  </Button>
+                </DataTableHeaderCell>
+                <DataTableHeaderCell>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort('email')}
+                    className="flex items-center"
+                  >
+                    <span className={getTypographyClass('body')}>Email</span>
+                    <SortIcon field="email" />
+                  </Button>
+                </DataTableHeaderCell>
+                <DataTableHeaderCell>
+                  <span className={getTypographyClass('body')}>Phone</span>
+                </DataTableHeaderCell>
+                <DataTableHeaderCell>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort('createdAt')}
+                    className="flex items-center"
+                  >
+                    <span className={getTypographyClass('body')}>Created</span>
+                    <SortIcon field="createdAt" />
+                  </Button>
+                </DataTableHeaderCell>
+                <DataTableHeaderCell className="text-right">
+                  <span className={getTypographyClass('body')}>Actions</span>
+                </DataTableHeaderCell>
+              </tr>
+            </DataTableHeader>
+            <DataTableBody>
+            {filteredAndSortedCustomers.map((customer) => (
+                <DataTableRow 
+                  key={customer.id}
+                  onClick={() => router.push(`/customers/${customer.id}`)}
+                  className="cursor-pointer"
+                >
+                  <DataTableCell>
+                    <div className="flex flex-col">
+                      <span className={getTypographyClass('body')}>
+                        {customer.name}
+                      </span>
+                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                        {customer.assignedVehicles > 0 && (
+                          <Badge variant="default" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                            {customer.assignedVehicles} vehicle{customer.assignedVehicles !== 1 ? 's' : ''}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </DataTableCell>
+                  <DataTableCell>
+                    <span className={getTypographyClass('body')}>{customer.email}</span>
+                  </DataTableCell>
+                  <DataTableCell>
+                    <span className={getTypographyClass('body')}>{customer.phone}</span>
+                  </DataTableCell>
+                  <DataTableCell>
+                    <span className={getTypographyClass('body')}>
+                      {customer.createdAt.toLocaleDateString()}
+                    </span>
+                  </DataTableCell>
+                  <DataTableCell className="text-right">
+                    <Button 
+                      variant="ghost" 
+                    className="h-8 w-8 p-0 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      handleDelete(customer);
+                      }}
+                    >
+                    <span className="sr-only">Delete customer</span>
+                    <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </DataTableCell>
+                </DataTableRow>
+              ))}
+            </DataTableBody>
+        </DataTable>
       </div>
-    </MobileLayout>
+
+      {/* Mobile View - List Report */}
+      <div className="md:hidden">
+        {filteredAndSortedCustomers.map((customer) => (
+          <div
+            key={customer.id}
+            onClick={() => router.push(`/customers/${customer.id}`)}
+            className="bg-transparent border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors"
+          >
+            <div className="px-4 py-3">
+              <div className="flex justify-between items-start">
+                <div className="space-y-1 min-w-0 flex-1">
+                  <h3 className={getTypographyClass('header')} style={{ margin: 0 }}>
+                    {customer.name}
+                  </h3>
+                  <p className={getTypographyClass('body')} style={{ margin: 0 }}>
+                    {customer.email}
+                  </p>
+                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <span>{customer.phone}</span>
+                    {customer.assignedVehicles > 0 && (
+                      <>
+                    <span>•</span>
+                        <Badge variant="default" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                          {customer.assignedVehicles} vehicle{customer.assignedVehicles !== 1 ? 's' : ''}
+                        </Badge>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Created {customer.createdAt.toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  className="h-8 w-8 p-0 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(customer);
+                  }}
+                >
+                  <span className="sr-only">Delete customer</span>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <AddCustomerModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={handleAddSuccess}
+      />
+    </PageLayout>
   );
 } 

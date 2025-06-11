@@ -2,6 +2,7 @@ import { Clock } from 'lucide-react';
 import { Customer } from '@/types/customer';
 import { useCustomerHistory } from '@/hooks/useCustomerHistory';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { getTypographyClass } from '@/lib/typography';
 
 interface CustomerHistoryProps {
   customer: Customer;
@@ -21,18 +22,29 @@ export function CustomerHistory({ customer }: CustomerHistoryProps) {
   if (error) {
     return (
       <div className="text-center py-8 bg-red-50 dark:bg-red-900/10 rounded-lg">
-        <p className="text-red-600 dark:text-red-400">{error}</p>
+        <p className={getTypographyClass('body')}>{error.message}</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      <h3 className={getTypographyClass('header')}>History</h3>
+      <div className="space-y-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+          <p className={getTypographyClass('body')}>
+            Created on {customer.createdAt.toLocaleDateString()}
+          </p>
+          {customer.updatedAt && (
+            <p className={getTypographyClass('body')}>
+              Last updated on {customer.updatedAt.toLocaleDateString()}
+            </p>
+          )}
+        </div>
+      </div>
       <div className="flex items-center space-x-2">
         <Clock className="w-5 h-5 text-gray-500" />
-        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          Activity History
-        </h3>
+        <h3 className={getTypographyClass('header')}>Activity History</h3>
       </div>
 
       {history.length > 0 ? (
@@ -43,10 +55,10 @@ export function CustomerHistory({ customer }: CustomerHistoryProps) {
               className="flex items-start space-x-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg"
             >
               <div className="flex-1">
-                <p className="text-sm text-gray-900 dark:text-white">
+                <p className={getTypographyClass('body')}>
                   {item.description}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className={getTypographyClass('body')}>
                   By {item.user.name} • {item.timestamp.toLocaleString()}
                 </p>
               </div>
@@ -56,7 +68,7 @@ export function CustomerHistory({ customer }: CustomerHistoryProps) {
       ) : (
         <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
           <Clock className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-500 dark:text-gray-400">
+          <p className={getTypographyClass('body')}>
             No activity history available.
           </p>
         </div>

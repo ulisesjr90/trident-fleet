@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { cn } from '@/lib/utils';
+import { getTypographyClass } from '@/lib/typography';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: string;
@@ -13,7 +14,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={props.id}
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            className={getTypographyClass('body')}
           >
             {label}
           </label>
@@ -34,7 +35,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {...props}
         />
         {error && (
-          <p className="mt-1 text-sm text-red-500 dark:text-red-400">{error}</p>
+          <p className={cn(getTypographyClass('body'), 'text-red-500 dark:text-red-400')}>
+            {error}
+          </p>
         )}
       </div>
     );

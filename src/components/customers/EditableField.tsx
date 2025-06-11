@@ -1,118 +1,61 @@
-import { useRef, useEffect } from 'react';
-import { Edit2, Check, X } from 'lucide-react';
-import { Input } from '@/components/ui/Input';
+import { useState } from 'react';
+import { Button } from '@/components/ui/Button';
+import { getTypographyClass } from '@/lib/typography';
 
 interface EditableFieldProps {
-  name: string;
+  label: string;
   value: string;
-  isEditing: boolean;
-  error?: string;
-  isOwner: boolean;
-  onEdit: () => void;
   onSave: (value: string) => void;
-  onCancel: () => void;
-  onKeyDown: (e: React.KeyboardEvent) => void;
-  formatValue?: (value: string) => string;
+  type?: 'text' | 'email' | 'tel';
   placeholder?: string;
-  required?: boolean;
-  setEditableFields: (fields: any) => void;
-  type?: 'text' | 'date' | 'number';
 }
 
 export function EditableField({
-  name,
+  label,
   value,
-  isEditing,
-  error,
-  isOwner,
-  onEdit,
   onSave,
-  onCancel,
-  onKeyDown,
-  formatValue = (v) => v,
+  type = 'text',
   placeholder,
-  required,
-  setEditableFields,
-  type = 'text'
 }: EditableFieldProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedValue, setEditedValue] = useState(value);
 
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isEditing]);
-
-  const formatDisplayValue = (val: string) => {
-    if (!val) return val;
-    if (type === 'date') {
-      return new Date(val).toLocaleDateString();
-    }
-    return formatValue(val);
+  const handleSave = () => {
+    onSave(editedValue);
+    setIsEditing(false);
   };
 
-  if (isEditing) {
-    return (
-      <div className="relative">
-        <Input
-          ref={inputRef}
-          type={type}
-          value={value}
-          onChange={(e) => {
-            const newValue = formatValue(e.target.value);
-            setEditableFields(fields =>
-              fields.map(f =>
-                f.name === name
-                  ? { ...f, value: newValue }
-                  : f
-              )
-            );
-          }}
-          onKeyDown={onKeyDown}
-          onBlur={() => onSave(value)}
-          error={error}
-          className={`pr-20 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:dark:invert [&::-webkit-calendar-picker-indicator]:hover:opacity-80`}
-          placeholder={placeholder}
-          required={required}
-        />
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
-          <button
-            onClick={() => onSave(value)}
-            className="p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-          >
-            <Check className="w-4 h-4" />
-          </button>
-          <button
-            onClick={onCancel}
-            className="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const handleCancel = () => {
+    setEditedValue(value);
+    setIsEditing(false);
+  };
 
   return (
-    <div
-      className={`group flex items-center justify-between p-2 rounded-lg ${
-        isOwner ? 'hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer' : ''
-      }`}
-      onClick={isOwner ? onEdit : undefined}
-      role={isOwner ? 'button' : undefined}
-      tabIndex={isOwner ? 0 : undefined}
-      onKeyDown={(e) => {
-        if (isOwner && (e.key === 'Enter' || e.key === ' ')) {
-          e.preventDefault();
-          onEdit();
-        }
-      }}
-    >
-      <p className="text-gray-900 dark:text-white">
-        {formatDisplayValue(value) || placeholder}
-      </p>
-      {isOwner && (
-        <Edit2 className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+    <div className="space-y-2">
+      <label className={getTypographyClass('body')}>
+        {label}
+      </label>
+      {isEditing ? (
+        <div className="space-y-2">
+          <input
+            type={type}
+            value={editedValue}
+            onChange={(e) => setEditedValue(e.target.value)}
+            placeholder={placeholder}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+          />
+          <div className="flex gap-2">
+            <Button onClick={handleSave}>Save</Button>
+            <Button variant="ghost" onClick={handleCancel}>Cancel</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between">
+          <p className={getTypographyClass('body')}>{value || placeholder}</p>
+          <Button variant="ghost" onClick={() => setIsEditing(true)}>
+            Edit
+          </Button>
+        </div>
       )}
     </div>
   );

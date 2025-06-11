@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { VehicleStatus } from './VehicleCard';
+import { VehicleStatus } from '@/types/vehicle';
 import { useVehicleOperations } from '@/hooks/useVehicleOperations';
+import { getTypographyClass } from '@/lib/typography';
 
 interface AddVehicleModalProps {
   isOpen: boolean;
@@ -19,7 +20,7 @@ export function AddVehicleModal({ isOpen, onClose, onSuccess }: AddVehicleModalP
 
   type SourceType = typeof SOURCE_OPTIONS[keyof typeof SOURCE_OPTIONS];
 
-  // Required fields
+  // Form state
   const [vehicleDescriptor, setVehicleDescriptor] = useState('');
   const [color, setColor] = useState('');
   const [source, setSource] = useState<SourceType | ''>('');
@@ -31,11 +32,9 @@ export function AddVehicleModal({ isOpen, onClose, onSuccess }: AddVehicleModalP
   const [state, setState] = useState('');
   const [registrationExpiration, setRegistrationExpiration] = useState('');
   const [notes, setNotes] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
-
-  // Oil change settings
   const [useDefaultOilChange, setUseDefaultOilChange] = useState(true);
   const [customOilChangeMileage, setCustomOilChangeMileage] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const { addVehicle, isLoading, error } = useVehicleOperations();
 
@@ -67,7 +66,7 @@ export function AddVehicleModal({ isOpen, onClose, onSuccess }: AddVehicleModalP
         notes: notes || null,
         mvaNumber: source === SOURCE_OPTIONS.AVIS ? mvaNumber || null : null,
         returnDate: source === SOURCE_OPTIONS.AVIS && returnDate ? new Date(returnDate) : null,
-        status: 'Available',
+        status: VehicleStatus.Available,
         isArchived: false,
       });
 
@@ -101,7 +100,7 @@ export function AddVehicleModal({ isOpen, onClose, onSuccess }: AddVehicleModalP
     <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 pt-16">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[calc(100vh-12rem)] overflow-y-auto mb-16">
         <div className="flex items-center justify-between p-3 border-b dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
-          <h2 className="text-lg font-semibold">Add New Vehicle</h2>
+          <h2 className={getTypographyClass('header')}>Add New Vehicle</h2>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
@@ -110,17 +109,19 @@ export function AddVehicleModal({ isOpen, onClose, onSuccess }: AddVehicleModalP
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-3 space-y-3 pb-6">
+        <form onSubmit={handleSubmit} className="p-3 space-y-6">
           {(error || formError) && (
-            <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-2 rounded-md text-sm">
+            <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-2 rounded-md">
+              <p className={getTypographyClass('body')}>
               {formError || error?.message}
+              </p>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* Required Fields */}
-            <div className="space-y-3">
-              <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300">Vehicle Information</h3>
+          <div className="space-y-6">
+            {/* Basic Information */}
+            <div className="space-y-4">
+              <h3 className={getTypographyClass('header')}>Basic Information</h3>
               
               <div>
                 <Input
@@ -166,7 +167,7 @@ export function AddVehicleModal({ isOpen, onClose, onSuccess }: AddVehicleModalP
               </div>
 
               {source === SOURCE_OPTIONS.AVIS && (
-                <>
+                <div className="space-y-4">
                   <div>
                     <Input
                       id="mvaNumber"
@@ -176,7 +177,7 @@ export function AddVehicleModal({ isOpen, onClose, onSuccess }: AddVehicleModalP
                     />
                   </div>
                   <div>
-                    <label htmlFor="returnDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label htmlFor="returnDate" className={getTypographyClass('body')}>
                       Return Date
                     </label>
                     <div className="relative">
@@ -190,13 +191,13 @@ export function AddVehicleModal({ isOpen, onClose, onSuccess }: AddVehicleModalP
                       />
                     </div>
                   </div>
-                </>
+                </div>
               )}
             </div>
 
-            {/* Optional Fields */}
-            <div className="space-y-3">
-              <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300">Additional Information</h3>
+            {/* Vehicle Details */}
+            <div className="space-y-4">
+              <h3 className={getTypographyClass('header')}>Vehicle Details</h3>
               
               <div>
                 <Input
@@ -236,7 +237,7 @@ export function AddVehicleModal({ isOpen, onClose, onSuccess }: AddVehicleModalP
               </div>
 
               <div>
-                <label htmlFor="registrationExpiration" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label htmlFor="registrationExpiration" className={getTypographyClass('body')}>
                   Registration Expiration
                 </label>
                 <div className="relative">
@@ -248,65 +249,65 @@ export function AddVehicleModal({ isOpen, onClose, onSuccess }: AddVehicleModalP
                     placeholder="Registration Expiration Date"
                     className="[&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:dark:invert"
                   />
-                </div>
               </div>
             </div>
           </div>
 
-          {/* Oil Change Settings */}
-          <div className="space-y-3 pt-3 border-t dark:border-gray-700">
-            <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300">Oil Change Settings</h3>
+            {/* Maintenance Settings */}
+            <div className="space-y-4">
+              <h3 className={getTypographyClass('header')}>Maintenance Settings</h3>
             
-            <div className="flex items-center space-x-2">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-start gap-3">
               <input
                 type="checkbox"
                 id="useDefaultOilChange"
                 checked={useDefaultOilChange}
                 onChange={(e) => setUseDefaultOilChange(e.target.checked)}
-                className="rounded border-gray-300 dark:border-gray-600"
+                    className="mt-1 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary"
               />
-              <label htmlFor="useDefaultOilChange" className="text-sm">
-                Use default oil change interval (current mileage + 5000)
+                  <label htmlFor="useDefaultOilChange" className={getTypographyClass('body')}>
+                    Use default oil change interval (5,000 miles)
               </label>
             </div>
 
             {!useDefaultOilChange && (
-              <div>
+                  <div className="pl-7">
                 <Input
                   id="customOilChangeMileage"
                   type="number"
                   value={customOilChangeMileage}
                   onChange={(e) => setCustomOilChangeMileage(e.target.value)}
-                  placeholder="Custom Next Oil Change Mileage"
-                  required={!useDefaultOilChange}
+                      placeholder="Custom Oil Change Interval (miles)"
                 />
               </div>
             )}
           </div>
 
-          {/* Notes */}
           <div>
-            <textarea
+                <Input
               id="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm"
-              rows={2}
-              placeholder="Notes"
+                  placeholder="Additional Notes"
             />
+              </div>
+            </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-3 border-t dark:border-gray-700">
+          <div className="flex justify-end gap-2 pt-4">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={isLoading}
             >
               Cancel
             </Button>
-            <Button type="submit" isLoading={isLoading}>
-              Add Vehicle
+            <Button
+              type="submit"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Adding...' : 'Add Vehicle'}
             </Button>
           </div>
         </form>

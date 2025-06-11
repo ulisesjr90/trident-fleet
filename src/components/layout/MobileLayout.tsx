@@ -82,7 +82,7 @@ export function MobileLayout({
       )}
       <main
         className={`min-h-screen ${
-          header ? 'pt-[56px]' : ''
+          header ? 'pt-20' : ''
         } ${showBottomNav ? 'pb-16' : ''}`}
       >
         {children}

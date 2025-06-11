@@ -1,25 +1,43 @@
-import { getServerSession } from "next-auth"
-import { redirect } from "next/navigation"
-import { authOptions } from "@/lib/auth"
+'use client';
 
-export default async function UsersLayout({
+import { useAuth } from '@/hooks/useAuth';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { RequireAuth } from '@/components/auth/RequireAuth';
+
+export default function UsersLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const session = await getServerSession(authOptions)
+  const { user, loading } = useAuth();
 
-  if (!session) {
-    redirect("/")
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
   }
 
-  if (session.user.role !== 'admin') {
-    redirect("/dashboard")
+  if (!user || user.role !== 'admin') {
+  return (
+      <RequireAuth>
+        <div className="p-4">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <p className="text-red-600 dark:text-red-400">
+              You do not have permission to access this page. Only administrators can manage users.
+            </p>
+          </div>
+        </div>
+      </RequireAuth>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300">
-      {children}
-    </div>
-  )
+    <RequireAuth>
+      <div className="p-4">
+        {children}
+      </div>
+    </RequireAuth>
+  );
 } 

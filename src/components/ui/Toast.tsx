@@ -2,38 +2,37 @@
 
 import * as React from "react"
 import { X } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { getTypographyClass } from "@/lib/typography"
 
 export type ToastType = "success" | "error" | "warning" | "info"
 
 interface ToastProps {
   message: string
-  type: ToastType
+  type?: ToastType
   onClose: () => void
 }
 
-const typeStyles: Record<ToastType, string> = {
-  success: "bg-green-50 text-green-800 dark:bg-green-900/50 dark:text-green-300",
-  error: "bg-red-50 text-red-800 dark:bg-red-900/50 dark:text-red-300",
-  warning: "bg-yellow-50 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300",
-  info: "bg-blue-50 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300",
-}
+export function Toast({ message, type = "info", onClose }: ToastProps) {
+  const bgColor = {
+    success: "bg-green-50 dark:bg-green-900/10",
+    error: "bg-red-50 dark:bg-red-900/10",
+    info: "bg-blue-50 dark:bg-blue-900/10",
+  }[type]
 
-export function Toast({ message, type, onClose }: ToastProps) {
+  const textColor = {
+    success: "text-green-800 dark:text-green-200",
+    error: "text-red-800 dark:text-red-200",
+    info: "text-blue-800 dark:text-blue-200",
+  }[type]
+
   return (
-    <div
-      className={cn(
-        "fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-lg p-4 shadow-lg",
-        typeStyles[type]
-      )}
-    >
-      <p className="text-sm font-medium">{message}</p>
+    <div className={`fixed bottom-4 right-4 ${bgColor} rounded-lg shadow-lg p-4 flex items-center gap-2`}>
+      <p className={`${getTypographyClass('body')} ${textColor}`}>{message}</p>
       <button
         onClick={onClose}
-        className="ml-2 rounded-full p-1 hover:bg-black/10 dark:hover:bg-white/10"
+        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
       >
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
+        <X className="w-4 h-4" />
       </button>
     </div>
   )

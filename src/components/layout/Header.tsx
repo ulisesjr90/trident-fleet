@@ -1,25 +1,64 @@
 'use client';
 
-import { ArrowLeft } from 'lucide-react';
-import { HeaderProps } from '@/types/layout';
+import { ReactNode } from 'react';
+import { getTypographyClass } from '@/lib/typography';
+import { ArrowLeft, User } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/Button';
 
-export function Header({ title, showBackButton, onBackClick }: HeaderProps) {
+interface HeaderProps {
+  title: string;
+  children?: ReactNode;
+  className?: string;
+  showBackButton?: boolean;
+  onBackClick?: () => void;
+}
+
+export function Header({ title, children, className = '', showBackButton, onBackClick }: HeaderProps) {
+  const router = useRouter();
+
+  const handleBackClick = () => {
+    if (onBackClick) {
+      onBackClick();
+    } else {
+      router.back();
+    }
+  };
+
+  const renderProfileButton = () => {
+    return (
+      <Button
+        variant="ghost"
+        onClick={() => router.push('/settings')}
+        className="ml-auto"
+      >
+        <User className="h-5 w-5" />
+      </Button>
+    );
+  };
+
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 pt-safe">
-      <div className="h-14 px-4 flex items-center justify-center relative">
-        {showBackButton && (
-          <button
-            onClick={onBackClick}
-            className="absolute left-4 p-2 -ml-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-            aria-label="Go back"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-        )}
-        <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-          {title}
-        </h1>
+    <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${className}`}>
+      <div className="flex items-center gap-2">
+          {showBackButton && (
+          <Button
+            variant="ghost"
+            onClick={handleBackClick}
+            className="p-2"
+            >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          )}
+        <h1 className={getTypographyClass('header')}>
+            {title}
+          </h1>
       </div>
-    </header>
+      {children && (
+        <div className="flex flex-wrap gap-2">
+          {children}
+        </div>
+      )}
+        {renderProfileButton()}
+      </div>
   );
 } 

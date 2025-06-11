@@ -1,17 +1,17 @@
-import { useEffect, useRef } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
+import { getTypographyClass } from '@/lib/typography';
 
 interface ModalProps {
-  title: string;
+  isOpen: boolean;
   onClose: () => void;
-  children: React.ReactNode;
+  title: string;
+  children: ReactNode;
   className?: string;
 }
 
-export function Modal({ title, onClose, children, className }: ModalProps) {
-  const modalRef = useRef<HTMLDivElement>(null);
-
+export function Modal({ isOpen, onClose, title, children, className = '' }: ModalProps) {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -19,48 +19,36 @@ export function Modal({ title, onClose, children, className }: ModalProps) {
       }
     };
 
-    const handleClickOutside = (e: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-
+    if (isOpen) {
     document.addEventListener('keydown', handleEscape);
-    document.addEventListener('mousedown', handleClickOutside);
-
-    // Prevent body scroll when modal is open
     document.body.style.overflow = 'hidden';
+    }
 
     return () => {
       document.removeEventListener('keydown', handleEscape);
-      document.removeEventListener('mousedown', handleClickOutside);
       document.body.style.overflow = 'unset';
     };
-  }, [onClose]);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 overflow-y-auto">
-      <div
-        ref={modalRef}
-        className={cn(
-          'bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md my-8',
-          'transform transition-all duration-200 ease-in-out',
-          'relative',
-          className
-        )}
-      >
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-screen items-center justify-center p-4 text-center">
+        <div className="fixed inset-0 bg-black/30" onClick={onClose} />
+        <div className={`relative w-full max-w-lg transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 p-6 text-left shadow-xl transition-all ${className}`}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className={getTypographyClass('header')}>
             {title}
           </h2>
-          <button
+            <Button
+              variant="ghost"
             onClick={onClose}
-            className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="absolute right-4 top-4"
           >
-            <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-          </button>
+              <X className="h-4 w-4" />
+            </Button>
         </div>
-        <div className="relative">
           {children}
         </div>
       </div>

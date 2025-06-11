@@ -1,338 +1,414 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { usePathname } from 'next/navigation';
-import { updateProfile, updatePassword, deleteUser } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
-import { Card } from '@/components/ui/Card';
+import React, { useState, useRef, useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
-import { Toast, ToastType } from '@/components/ui/Toast';
-import { useTheme } from '@/components/providers/ThemeProvider';
-import { MobileLayout } from '@/components/layout/MobileLayout';
-import { PageContainer } from '@/components/layout/PageContainer';
+import { Label } from '@/components/ui/Label';
+import { toast } from 'sonner';
+import { updateProfile } from '@/lib/firebase/auth';
+import { useRouter } from 'next/navigation';
+import { getAuth, updatePassword, EmailAuthProvider, reauthenticateWithCredential, AuthError } from 'firebase/auth';
+import { Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
+import { getTypographyClass } from '@/lib/typography';
+import { DataTable, DataTableHeader, DataTableBody, DataTableRow, DataTableCell, DataTableHeaderCell } from '@/components/ui/DataTable';
+import { PageLayout } from '@/components/layout/PageLayout';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+
+// Helper function to get user-friendly error messages
+const getAuthErrorMessage = (error: any): string => {
+  if (error && typeof error === 'object' && 'code' in error) {
+    switch (error.code) {
+    case 'auth/wrong-password':
+        return 'Current password is incorrect';
+      case 'auth/too-many-requests':
+        return 'Too many attempts. Please try again later';
+    case 'auth/requires-recent-login':
+        return 'Please sign out and sign in again to change your password';
+    default:
+        return 'An error occurred while updating your password';
+    }
+  }
+  return 'An unexpected error occurred';
+};
 
 export default function SettingsPage() {
-  const { data: session, update } = useSession();
-  const { isDarkMode, toggleTheme } = useTheme();
-  const pathname = usePathname();
-  const [isLoading, setIsLoading] = useState(false);
+  const { user, signOut, updatePreferences } = useAuth();
+  const { resolvedTheme, setTheme } = useTheme();
+  const router = useRouter();
   const [name, setName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordChanged, setPasswordChanged] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Initialize state from session and Firestore
+  // Update name when user changes
   useEffect(() => {
-    const initializeSettings = async () => {
-      if (!session?.user?.id) return;
-
-      try {
-        // Get user document from Firestore
-        const userRef = doc(db, 'users', session.user.id);
-        const userDoc = await getDoc(userRef);
-        
-        // Set name from Firestore if available, otherwise from session
-        if (userDoc.exists() && userDoc.data().displayName) {
-          setName(userDoc.data().displayName);
-        } else if (session.user.name) {
-          setName(session.user.name);
-        }
-      } catch (error) {
-        console.error('Error loading user preferences:', error);
-        showToast('Failed to load preferences', 'error');
-      }
-    };
-
-    initializeSettings();
-  }, [session]);
-
-  const showToast = (message: string, type: ToastType) => {
-    setToast({ message, type });
-  };
-
-  const handleProfileUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-
-    try {
-      if (!auth.currentUser || !session?.user?.id) {
-        throw new Error('No user logged in');
-      }
-
-      // Update Firebase profile
-      await updateProfile(auth.currentUser, {
-        displayName: name,
-      });
-
-      // Update user document in Firestore
-      const userRef = doc(db, 'users', session.user.id);
-      await setDoc(userRef, {
-        displayName: name,
-        updatedAt: new Date().toISOString(),
-        preferences: {
-          darkMode: isDarkMode,
-          language: 'en'
-        }
-      }, { merge: true });
-
-      // Update NextAuth session
-      await update({
-        ...session,
-        user: {
-          ...session.user,
-          name,
-        },
-      });
-
-      showToast('Profile updated successfully', 'success');
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      showToast('Failed to update profile', 'error');
-    } finally {
-      setIsLoading(false);
+    if (user?.displayName) {
+      setName(user.displayName);
     }
+  }, [user?.displayName]);
+
+  const handleBack = () => {
+    router.back();
   };
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-
-    try {
-      if (!auth.currentUser) {
-        throw new Error('No user logged in');
-      }
-
-      if (newPassword !== confirmPassword) {
-        throw new Error('Passwords do not match');
-      }
-
-      if (newPassword.length < 6) {
-        throw new Error('Password must be at least 6 characters');
-      }
-
-      await updatePassword(auth.currentUser, newPassword);
-      showToast('Password updated successfully', 'success');
-      
-      // Clear password fields
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (error) {
-      console.error('Error updating password:', error);
-      showToast(error instanceof Error ? error.message : 'Failed to update password', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAccountDeletion = async () => {
-    if (!window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+  // Auto-save name changes when input loses focus
+  const handleNameBlur = async () => {
+    if (name === user?.displayName) return;
+    
+    if (!name.trim()) {
+      setName(user?.displayName || '');
+      toast.error('Name cannot be empty');
       return;
     }
 
     setIsLoading(true);
-
     try {
-      if (!auth.currentUser || !session?.user?.id) {
-        throw new Error('No user logged in');
-      }
-
-      // Delete user preferences
-      const userPrefsRef = doc(db, 'user_preferences', session.user.id);
-      await setDoc(userPrefsRef, { deleted: true }, { merge: true });
-
-      // Delete user document
-      const userRef = doc(db, 'users', session.user.id);
-      await setDoc(userRef, { deleted: true }, { merge: true });
-
-      // Delete Firebase auth account
-      await deleteUser(auth.currentUser);
-      showToast('Account deleted successfully', 'success');
-      // Redirect will be handled by the auth state change
+      await updateProfile({ displayName: name });
+      toast.success('Profile updated successfully');
     } catch (error) {
-      console.error('Error deleting account:', error);
-      showToast('Failed to delete account', 'error');
+      toast.error('Failed to update profile');
+      console.error(error);
+      setName(user?.displayName || '');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleThemeToggle = async () => {
-    try {
-      await toggleTheme();
-      showToast(`${!isDarkMode ? 'Dark' : 'Light'} mode enabled`, 'success');
-    } catch (error) {
-      showToast('Failed to save theme preference', 'error');
+  // Handle Enter key to save and Escape key to cancel
+  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur();
+    } else if (e.key === 'Escape') {
+      setName(user?.displayName || '');
+      e.currentTarget.blur();
     }
   };
 
+  const handlePasswordChange = async () => {
+    setPasswordError(null);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('All password fields are required');
+      return;
+  }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      
+      if (!user || !user.email) {
+        throw new Error('No user is currently signed in');
+      }
+
+      // Reauthenticate user
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+
+      // Update password
+      await updatePassword(user, newPassword);
+      
+      toast.success('Password updated successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordChanged(true);
+      
+      // Reset success state after 3 seconds
+      setTimeout(() => {
+        setPasswordChanged(false);
+      }, 3000);
+    } catch (error) {
+      console.error(error);
+      const errorMessage = getAuthErrorMessage(error);
+      setPasswordError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsChangingPassword(false);
+  }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      // Clear auth tokens
+      document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'user-role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      // Redirect to login
+      router.push('/');
+    } catch (error) {
+      toast.error('Failed to sign out');
+      console.error(error);
+  }
+  };
+
+  const handleThemeChange = async (checked: boolean) => {
+    const newTheme = checked ? 'dark' : 'light';
+    setTheme(newTheme);
+    if (user) {
+      await updatePreferences({ theme: newTheme });
+  }
+  };
+
+  const renderEditableCell = (field: string, value: string) => {
+    if (editingField === field) {
+      return (
+        <div className="flex items-center gap-2">
+          <Input
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleNameKeyDown}
+            autoFocus
+            className="flex-1"
+          />
+          <Button
+            variant="ghost"
+            onClick={handleNameBlur}
+            disabled={isLoading}
+            className="h-8 w-8 p-0 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setName(user?.displayName || '');
+              setEditingField(null);
+            }}
+            className="h-8 w-8 p-0 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+          >
+            <AlertCircle className="h-4 w-4" />
+          </Button>
+        </div>
+      );
+    }
+    return (
+      <div 
+        onClick={() => {
+          setEditingField(field);
+          setEditValue(value || user?.displayName || '');
+        }}
+        className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+      >
+        {value || user?.displayName || '-'}
+      </div>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg">
+        <p className={getTypographyClass('body')}>
+          Error loading settings: {error}
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <MobileLayout
-      header={{
-        title: 'Settings',
-        showBackButton: false
-      }}
-      currentPath={pathname}
-      userRole={session?.user?.role}
-    >
-      <PageContainer>
-        {/* Profile Section */}
-        <Card className="bg-white dark:bg-[#1f2937] transition-colors duration-300">
-          <div className="p-4">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white transition-colors duration-300">Profile</h2>
-            <form onSubmit={handleProfileUpdate} className="space-y-4">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                  Name
-                </label>
-                <Input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
-                  required
-                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors duration-300"
-                />
-              </div>
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                  Email
-                </label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={session?.user?.email || ''}
-                  disabled
-                  className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors duration-300"
-                />
-              </div>
-              <Button type="submit" isLoading={isLoading}>
-                Update Profile
-              </Button>
-            </form>
+    <PageLayout title="Settings">
+      <div className="space-y-6">
+        {/* Profile Information */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 className={getTypographyClass('header')}>Profile Information</h2>
           </div>
-        </Card>
+          <DataTable>
+            <DataTableBody>
+              <DataTableRow>
+                <DataTableCell className="font-medium w-1/3">Name</DataTableCell>
+                <DataTableCell>
+                  {renderEditableCell('name', name)}
+                </DataTableCell>
+              </DataTableRow>
+              <DataTableRow>
+                <DataTableCell className="font-medium w-1/3">Email</DataTableCell>
+                <DataTableCell>
+                  {user?.email || '-'}
+                </DataTableCell>
+              </DataTableRow>
+              <DataTableRow>
+                <DataTableCell className="font-medium w-1/3">Role</DataTableCell>
+                <DataTableCell>
+                  {user?.role || '-'}
+                </DataTableCell>
+              </DataTableRow>
+            </DataTableBody>
+          </DataTable>
+        </div>
+
+        {/* Password Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h2 className={getTypographyClass('header')}>Change Password</h2>
+          </div>
+          <DataTable>
+            <DataTableBody>
+              <DataTableRow>
+                <DataTableCell className="font-medium w-1/3">Current Password</DataTableCell>
+                <DataTableCell>
+                  <div className="relative">
+                    <Input
+                      type={showCurrentPassword ? 'text' : 'password'}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      className="w-full pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </DataTableCell>
+              </DataTableRow>
+              <DataTableRow>
+                <DataTableCell className="font-medium w-1/3">New Password</DataTableCell>
+                <DataTableCell>
+                  <div className="relative">
+                    <Input
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </DataTableCell>
+              </DataTableRow>
+              <DataTableRow>
+                <DataTableCell className="font-medium w-1/3">Confirm<br />New Password</DataTableCell>
+                <DataTableCell>
+                  <div className="relative">
+                    <Input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </DataTableCell>
+              </DataTableRow>
+              <DataTableRow>
+                <DataTableCell className="font-medium w-1/3">Actions</DataTableCell>
+                <DataTableCell>
+                  {passwordError && (
+                    <div className="flex items-center gap-2 text-red-500 dark:text-red-400 mb-4">
+                      <AlertCircle className="h-4 w-4" />
+                      <p className={getTypographyClass('body')}>{passwordError}</p>
+                    </div>
+                  )}
+
+                  {passwordChanged && (
+                    <div className="flex items-center gap-2 text-green-500 dark:text-green-400 mb-4">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <p className={getTypographyClass('body')}>Password updated successfully</p>
+                    </div>
+                  )}
+
+                  <Button
+                    onClick={handlePasswordChange}
+                    disabled={isChangingPassword}
+                    className="w-full"
+                  >
+                    {isChangingPassword ? 'Updating...' : 'Update Password'}
+                  </Button>
+                </DataTableCell>
+              </DataTableRow>
+            </DataTableBody>
+          </DataTable>
+        </div>
 
         {/* Theme Section */}
-        <Card className="bg-white dark:bg-[#1f2937] transition-colors duration-300">
-          <div className="p-4">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white transition-colors duration-300">Theme</h2>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium text-gray-900 dark:text-white transition-colors duration-300">Dark Mode</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">Enable dark mode for the application</p>
-                </div>
-                <button
-                  onClick={handleThemeToggle}
-                  className={`relative inline-flex h-7 w-14 items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                    isDarkMode ? 'bg-blue-600' : 'bg-gray-200'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform duration-300 ease-in-out ${
-                      isDarkMode ? 'translate-x-7' : 'translate-x-1'
-                    }`}
-                  >
-                    {isDarkMode ? (
-                      <svg className="h-6 w-6 p-1 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                      </svg>
-                    ) : (
-                      <svg className="h-6 w-6 p-1 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                      </svg>
-                    )}
-                  </span>
-                </button>
-              </div>
-            </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h2 className={getTypographyClass('header')}>Appearance</h2>
           </div>
-        </Card>
+          <DataTable>
+            <DataTableBody>
+              <DataTableRow>
+                <DataTableCell className="font-medium w-1/3">Dark Mode</DataTableCell>
+                <DataTableCell>
+                  <div className="flex items-center justify-between">
+                    <Switch
+                      checked={resolvedTheme === 'dark'}
+                      onCheckedChange={handleThemeChange}
+                    />
+                  </div>
+                </DataTableCell>
+              </DataTableRow>
+            </DataTableBody>
+          </DataTable>
+        </div>
 
-        {/* Password Change Section */}
-        <Card className="bg-white dark:bg-[#1f2937] transition-colors duration-300">
-          <div className="p-4">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white transition-colors duration-300">Change Password</h2>
-            <form onSubmit={handlePasswordChange} className="space-y-4">
-              <div>
-                <label htmlFor="currentPassword" className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                  Current Password
-                </label>
-                <Input
-                  id="currentPassword"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  required
-                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors duration-300"
-                />
-              </div>
-              <div>
-                <label htmlFor="newPassword" className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                  New Password
-                </label>
-                <Input
-                  id="newPassword"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors duration-300"
-                />
-              </div>
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                  Confirm New Password
-                </label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors duration-300"
-                />
-              </div>
-              <Button type="submit" isLoading={isLoading}>
-                Change Password
-              </Button>
-            </form>
+        {/* Sign Out Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 className={getTypographyClass('header')}>Account</h2>
           </div>
-        </Card>
-
-        {/* Account Management Section */}
-        <Card className="bg-white dark:bg-[#1f2937] transition-colors duration-300">
-          <div className="p-4">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white transition-colors duration-300">Account Management</h2>
-            <div className="space-y-4">
-              <Button 
-                variant="danger" 
-                className="w-full"
-                onClick={handleAccountDeletion}
-                isLoading={isLoading}
-              >
-                Delete Account
-              </Button>
-            </div>
+          <div className="p-6">
+            <DataTableRow>
+              <DataTableCell className="font-medium w-1/3">Sign Out</DataTableCell>
+              <DataTableCell>
+        <Button
+          onClick={handleSignOut}
+                  variant="outline"
+          className="w-full"
+        >
+          Sign Out
+        </Button>
+              </DataTableCell>
+            </DataTableRow>
           </div>
-        </Card>
-      </PageContainer>
-
-      {/* Toast Notifications */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
-    </MobileLayout>
+        </div>
+      </div>
+    </PageLayout>
   );
 } 

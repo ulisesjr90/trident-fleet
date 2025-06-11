@@ -3,15 +3,19 @@ import { collection, query, orderBy, getDocs, addDoc, serverTimestamp, where, do
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 import { useToast } from '@/components/ui/use-toast';
-import { setUserRole } from '@/lib/firebase-admin';
+import { useAuth } from '@/hooks/useAuth';
+// import { setUserRole } from '@/lib/firebase-admin';
 
 export interface User {
   id: string;
   displayName: string;
   email: string;
   role: 'admin' | 'rep';
-  createdAt: Date;
+  status: 'active' | 'inactive';
+  invitedAt: Date;
+  lastLoginAt: Date | null;
   updatedAt: Date;
+  photoURL?: string;
 }
 
 export function useUsers() {
@@ -19,6 +23,7 @@ export function useUsers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { user: currentUser, isAdmin } = useAuth();
 
   // Fetch users
   const fetchUsers = async () => {
@@ -26,19 +31,52 @@ export function useUsers() {
       setLoading(true);
       setError(null);
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, orderBy('createdAt', 'desc'));
+      
+      // For admins, fetch all users
+      // For reps, only fetch other reps
+      const q = isAdmin 
+        ? query(usersRef)  // No filters for admins, get all users
+        : query(usersRef, where('role', '==', 'rep'));  // Only reps for non-admins
+      
       const querySnapshot = await getDocs(q);
       
-      const usersData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        displayName: doc.data().displayName || doc.data().email?.split('@')[0] || 'Unnamed User',
-        email: doc.data().email || '',
-        role: doc.data().role || 'rep',
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-        updatedAt: doc.data().updatedAt?.toDate() || new Date()
-      }));
+      const usersData = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        
+        // Helper function to safely convert timestamps
+        const convertTimestamp = (timestamp: any): Date | null => {
+          if (!timestamp) return null;
+          if (timestamp.toDate) return timestamp.toDate();
+          if (timestamp instanceof Date) return timestamp;
+          if (typeof timestamp === 'string') return new Date(timestamp);
+          if (typeof timestamp === 'number') return new Date(timestamp);
+          return null;
+        };
+
+        return {
+          id: doc.id,
+          displayName: data.displayName || data.email?.split('@')[0] || 'Unnamed User',
+          email: data.email || '',
+          role: data.role || 'rep',
+          status: data.status || 'active',
+          invitedAt: convertTimestamp(data.invitedAt) || new Date(),
+          lastLoginAt: convertTimestamp(data.lastLoginAt),
+          updatedAt: convertTimestamp(data.updatedAt) || new Date(),
+          photoURL: data.photoURL || undefined
+        };
+      });
       
-      setUsers(usersData);
+      // Sort users after fetching
+      const sortedUsers = usersData.sort((a, b) => {
+        // First sort by role (admins first)
+        if (a.role !== b.role) {
+          return a.role === 'admin' ? -1 : 1;
+        }
+        // Then sort by invitedAt
+        return (b.invitedAt?.getTime() || 0) - (a.invitedAt?.getTime() || 0);
+      });
+      
+      setUsers(sortedUsers);
     } catch (err) {
       console.error('Error fetching users:', err);
       setError('Failed to fetch users. Please try again.');
@@ -56,6 +94,18 @@ export function useUsers() {
   const inviteUser = async (email: string, role: 'admin' | 'rep' = 'rep') => {
     try {
       setError(null);
+      
+      // Only admins can invite other admins
+      if (role === 'admin' && !isAdmin) {
+        setError('Only administrators can invite other administrators');
+        toast({
+          title: 'Error',
+          description: 'Only administrators can invite other administrators',
+          variant: 'destructive'
+        });
+        return false;
+      }
+
       const usersRef = collection(db, 'users');
       
       // Check if user already exists
@@ -79,21 +129,44 @@ export function useUsers() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, tempPassword);
       const user = userCredential.user;
 
-      // Set user role in Firebase Auth custom claims
-      const roleSet = await setUserRole(user.uid, role);
-      if (!roleSet) {
-        throw new Error('Failed to set user role');
-      }
-
       // Create user document in Firestore
       const userDoc = doc(db, 'users', user.uid);
       await setDoc(userDoc, {
         email,
         displayName: email.split('@')[0], // Default display name from email
         role,
-        createdAt: serverTimestamp(),
+        status: 'active',
+        invitedAt: serverTimestamp(),
+        lastLoginAt: null,
         updatedAt: serverTimestamp()
       });
+
+      // Set custom claims for users
+      try {
+        const response = await fetch('/api/auth/set-role', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            uid: user.uid,
+            role: role
+          }),
+        });
+
+        const responseData = await response.json();
+
+        if (!response.ok || !responseData.success) {
+          console.error('Failed to set user role', responseData);
+          throw new Error(responseData.error || 'Failed to set user role');
+        }
+
+        console.log('User role set successfully', responseData);
+      } catch (error) {
+        console.error(`Error setting ${role} role:`, error);
+        // Continue with the process even if setting custom claims fails
+        // The user can still have a role in Firestore
+      }
 
       // Send password reset email
       await sendPasswordResetEmail(auth, email);
@@ -121,8 +194,10 @@ export function useUsers() {
 
   // Initial fetch
   useEffect(() => {
+    if (currentUser) {
     fetchUsers();
-  }, []);
+    }
+  }, [currentUser, isAdmin]);
 
   return {
     users,

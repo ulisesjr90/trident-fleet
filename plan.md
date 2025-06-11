@@ -1,17 +1,227 @@
 # Trident Fleet App Development Plan
 
-## Project Overview
-A fleet management application for small-scale operations, built with Next.js, React, and Firebase.
+## Overview
+A comprehensive fleet management application for managing vehicles, customers, and related operations. Designed for small-scale operations with up to 30 active vehicles and 6+ users.
 
-## Tech Stack ✅
-- **Frontend**: Next.js 14, React 18, TypeScript
-- **Styling**: Tailwind CSS
-- **Backend**: Firebase (Authentication, Firestore)
-- **State Management**: React Context + Hooks
-- **Form Handling**: React Hook Form + Zod
-- **UI Components**: Custom components with Tailwind CSS
-- **Icons**: Lucide React
-- **Development**: ESLint, Prettier
+## Technology Stack
+- **Frontend**: Next.js, React, Tailwind CSS
+- **Backend**: Firebase/Firestore (Spark Plan)
+- **Authentication**: firebase auth
+- **Storage**: Firebase Storage
+- **State Management**: React Query
+- **Forms**: React Hook Form
+- **UI Components**: Shadcn/ui
+
+## Design System
+- **Colors**
+  - Primary: #0066CC (Navy Blue)
+  - Accent: #FFD700 (Golden Yellow)
+  - Background: #FFFFFF (Light) / #1A1A1A (Dark)
+  - Text: #333333 (Light) / #FFFFFF (Dark)
+  - Success: #22C55E
+  - Warning: #F59E0B
+  - Error: #EF4444
+- **Typography**
+ typography.ts
+ - **Spacing**
+  - Base: 4px
+  - Common: 8px, 16px, 24px, 32px
+- **Icons**
+  - Lucide Icons
+  - Simple, clean style
+  - Consistent stroke width
+- **No Animations**
+  - Direct state changes
+  - No transitions
+  - No loading animations (except spinner)
+
+## Layout Structure
+- **Mobile Layout**
+  - Header
+    - Fixed position
+    - Safe area inset top
+    - Title centered
+    - Back button (when needed)
+  - Main Content
+    - Scrollable area
+    - Safe area insets
+    - No parent layout constraints
+    - Direct child styling
+  - Bottom Navigation
+    - Fixed position
+    - Safe area inset bottom
+    - Icons only
+    - Active state indicator
+
+## Application Structure
+
+### Authentication & User Management ✅
+  - Email/password authentication
+  - Role-based redirection
+  - Session management
+  - "Forgot Password" link
+
+- **Forgot Password** (`/auth/forgot-password`) ✅
+  - Email verification
+  - Password reset flow
+  - Security notifications
+
+- **Reset Password** (`/auth/reset-password`) ✅
+  - Token validation
+  - New password setup
+  - Password requirements
+  - Success confirmation
+
+### Dashboard Pages
+1. **Main Dashboard** (`/dashboard`) ✅
+   - Role-based rendering (Admin/Rep)
+   - Quick stats
+   - Recent activity
+   - Maintenance alerts
+   - Pull-to-refresh
+
+2. **Vehicles** (`/vehicles`) ✅
+   - Vehicle list view
+   - Status filters
+   - Search functionality
+   - Add vehicle button (Admin only)
+   - Vehicle cards with status badges
+
+3. **Vehicle Details** (`/vehicles/[id]`) ✅
+   - Vehicle information
+   - Status management
+   - Maintenance history
+   - Assignment history
+   - Action buttons (Admin only)
+   - Archive/Delete functionality
+
+4. **Customers** (`/customers`) ✅
+   - Customer list view
+   - Search functionality
+   - Add customer button
+   - Sharing options
+   - Customer cards
+
+5. **Customer Details** (`/customers/[id]`) ✅
+   - Customer information
+   - Vehicle assignments
+   - Sharing management
+   - History tracking
+   - Editable fields
+
+6. **Users** (`/users`) ✅
+   - Admin only access
+   - User management
+   - Role assignment
+   - Status tracking
+
+7. **Settings** (`/settings`) ✅
+   - Profile management
+   - Theme preferences
+   - Account settings
+   - Session management
+
+### Components Structure
+```
+src/
+├── app/                    # Next.js app directory
+│   ├── (auth)/            # Authentication routes
+│   ├── (dashboard)/       # Protected dashboard routes
+│   └── api/               # API routes
+├── components/            # React components
+│   ├── ui/               # UI components
+│   ├── dashboard/        # Dashboard components
+│   ├── vehicles/         # Vehicle components
+│   ├── customers/        # Customer components
+│   └── layout/           # Layout components
+├── lib/                  # Utility functions
+├── hooks/               # Custom React hooks
+├── types/               # TypeScript types
+└── constants/           # Application constants
+```
+
+### Data Models
+- **Vehicle**
+  - Basic information
+  - Status tracking
+  - Maintenance records
+  - Assignment history
+
+- **Customer**
+  - Profile information
+  - Vehicle assignments
+  - Sharing permissions
+  - Activity history
+
+- **User**
+  - Authentication details
+  - Role management
+  - Session tracking
+  - Activity logging
+
+### Features
+- **Role-based Access**
+  - Admin: Full access
+  - Rep: Limited access
+  - Protected routes
+  - Permission checks
+
+- **Mobile-first Design**
+  - Responsive layouts
+  - Touch-friendly interfaces
+  - Bottom navigation
+  - Safe area handling
+
+- **Real-time Updates**
+  - Status changes
+  - Maintenance alerts
+  - Assignment updates
+  - Activity tracking
+
+- **Data Management**
+  - CRUD operations
+  - Data validation
+  - Error handling
+  - Loading states
+
+### Error Handling
+- **Frontend Validation**
+  - Form validation
+  - Input constraints
+  - Error messages
+  - Success feedback
+
+- **Error States**
+  - Loading indicators
+  - Error messages
+  - Fallback UI
+  - Recovery options
+
+### Security
+- **Authentication**
+  - Session management
+  - Token validation
+  - Role verification
+  - Access control
+
+- **Data Protection**
+  - Input sanitization
+  - XSS prevention
+  - CSRF protection
+  - Rate limiting
+
+### Performance
+- **Optimizations**
+  - Code splitting
+  - Lazy loading
+  - Image optimization
+  - Caching strategies
+
+- **Monitoring**
+  - Error tracking
+  - Performance metrics
+  - Usage analytics
+  - Health checks
 
 ## Project Structure ✅
 ```
@@ -134,7 +344,7 @@ src/
    - Account management
 
 ### API Routes ✅
-1. **Auth API** (`/api/auth/[...nextauth]`) ✅
+1. **Auth API** (`/api/auth/[...firebase auth]`) ✅
    - Authentication endpoints
    - Session management
    - Token handling
@@ -310,7 +520,6 @@ src/
 - ✅ Authentication context created
 - ✅ Base UI components implemented
 - ✅ Layout components completed
-- ✅ Login page implemented at `/auth/login`
 - ✅ Login page simplified with a placeholder logo in the public folder
 - ✅ Firebase configuration updated with correct values
 
@@ -341,7 +550,7 @@ src/
 # Implementation Plan
 
 ## 1. Authentication & Authorization ✅
-- [x] Set up NextAuth.js with Firebase
+- [x] Set up firebase auth with Firebase
 - [x] Configure email/password authentication
 - [x] Implement role-based access control
 - [x] Create protected routes
@@ -452,28 +661,22 @@ src/
 10. Implement customer history
 
 ## Recent Updates
-- ✅ Added Firestore security rules for customers collection
-- ✅ Implemented customer list view for representatives
-- ✅ Added customer card component
-- ✅ Set up customer data fetching
-- ✅ Added customer creation placeholder
-- ✅ Implemented customer sharing rules
-- ✅ Added customer deletion rules
-- ✅ Set up customer update rules
-- ✅ Added customer read rules
-- ✅ Implemented customer permissions
+- ✅ Updated login pages to use placeholder titles
+- ✅ Added profile icon with dropdown menu in header
+- ✅ Implemented session loading states
+- ✅ Added error handling for authentication
+- ✅ Improved header component with dynamic titles
+- ✅ Enhanced mobile responsiveness
+- ✅ Added dark mode support for all components
 
 ## Notes
-- Customer management is currently in progress 🚧
-- Firestore rules have been updated to support customer operations ✅
-- Customer sharing functionality is being implemented 🚧
-- Customer detail views are being designed 🚧
-- Customer activity logging is being set up 🚧
-- Customer analytics are being planned 🚧
-- Customer import/export is being considered 🚧
-- Customer notifications are being designed 🚧
-- Customer reports are being planned 🚧
-- Customer preferences are being considered 🚧
+- Login pages now use generic placeholder text
+- Session loading states are properly handled
+- Profile icon is only shown on authenticated pages
+- Header component supports dynamic titles
+- Dark mode is consistently applied across components
+- Mobile responsiveness has been improved
+- Error handling has been enhanced
 
 # Trident Fleet App Implementation Plan
 
@@ -481,10 +684,13 @@ src/
 
 ### Completed Features ✅
 1. Authentication System
-   - NextAuth integration with Firebase
+   - firebase auth integration with Firebase
    - JWT-based session management
    - Role-based access control (admin/rep)
    - Secure login/logout flow
+   - Placeholder login pages implemented
+   - Session loading states handled 
+   - Error handling for authentication
 
 2. Customer Management
    - Customer list view with grid layout
@@ -501,6 +707,8 @@ src/
    - Toast notifications
    - Loading states
    - Error handling
+   - Profile icon with dropdown menu
+   - Header component with dynamic titles
 
 ### In Progress 🚧
 1. Vehicle Management

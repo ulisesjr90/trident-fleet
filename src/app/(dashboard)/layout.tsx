@@ -1,35 +1,55 @@
-import { getServerSession } from "next-auth"
-import { redirect } from "next/navigation"
-import { authOptions } from "@/lib/auth"
+'use client'
 
-export default async function DashboardLayout({
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { MobileNavigation } from "@/components/layout/MobileNavigation"
+import { Sidebar } from '@/components/layout/Sidebar';
+import { useAuth } from '@/hooks/useAuth';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const session = await getServerSession(authOptions)
+  const router = useRouter();
+  const { user, loading } = useAuth();
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  if (!session) {
-    redirect("/auth/login")
+  useEffect(() => {
+    if (!loading && !user) {
+      console.log('DashboardLayout: No user found, redirecting to login...');
+      // Clear any existing auth tokens
+      document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'user-role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      // Force a hard navigation
+      window.location.href = '/';
+    }
+  }, [user, loading]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300">
-      {/* Header */}
-      <header className="fixed top-0 z-50 w-full border-b bg-white dark:bg-gray-900 dark:border-gray-800 transition-colors duration-300">
-        <div className="flex h-14 items-center justify-center px-4">
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white transition-colors duration-300">
-            Dashboard
-          </h1>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1 pt-14 pb-16 bg-white dark:bg-gray-900 transition-colors duration-300">
-        <div className="container mx-auto px-4">
-          {children}
-        </div>
-      </main>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <Sidebar 
+        userRole={user.role} 
+        isCollapsed={isSidebarCollapsed}
+        onCollapseChange={setIsSidebarCollapsed}
+      />
+      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'md:pl-16' : 'md:pl-64'}`}>
+        {children}
+      </div>
+      <MobileNavigation userRole={user.role} />
     </div>
-  )
+  );
 } 

@@ -12,7 +12,10 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-      return hasRole('admin');
+      return isSignedIn() && (
+        request.auth.token.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
     }
     
     function isRep() {
@@ -48,15 +51,22 @@ service cloud.firestore {
     // Customers collection
     match /customers/{customerId} {
       allow read: if isAuthenticated() && (
+        isAdmin() ||
         isOwner(resource.data.primaryOwnerId) ||
         request.auth.uid in resource.data.additionalOwnerIds
       );
       
       allow create: if isAuthenticated();
       
-      allow update: if isAuthenticated() && isOwner(resource.data.primaryOwnerId);
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        isOwner(resource.data.primaryOwnerId)
+      );
       
-      allow delete: if isAuthenticated() && isOwner(resource.data.primaryOwnerId);
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        isOwner(resource.data.primaryOwnerId)
+      );
     }
     
     // Allow complex queries for customers collection
@@ -92,28 +102,20 @@ service cloud.firestore {
 
     // Vehicles collection
     match /vehicles/{vehicleId} {
-      // Both admins and reps can read vehicles
-      allow read: if isAuthenticated();
+      // Both authenticated users can read vehicles
+      allow read: if request.auth != null;
       
-      // Both admins and reps can create vehicles
-      allow create: if isAuthenticated();
+      // Both authenticated users can create vehicles
+      allow create: if request.auth != null;
       
-      // Admins can update any vehicle, reps can only update specific fields
-      allow update: if isAdmin() || (
-        isRep() && (
-          // Reps can only update these fields
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['status', 'mileage', 'lastServiceDate', 'updatedAt'])
-        )
-      );
+      // Both authenticated users can update vehicles
+      allow update: if request.auth != null;
       
       // Only admins can delete vehicles
-      allow delete: if isAdmin();
+      allow delete: if request.auth.token.role == 'admin';
       
-      // Allow complex queries
-      allow list: if isAuthenticated() && (
-        request.query.limit <= 1000
-      );
+      // Allow list queries with reasonable limits
+      allow list: if request.auth != null && request.query.limit <= 1000;
     }
     
     // Vehicle Events collection

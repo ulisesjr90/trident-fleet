@@ -1,173 +1,210 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { signIn, useSession } from 'next-auth/react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { useTheme } from '@/components/providers/ThemeProvider'
-
-type ToastType = 'error' | 'success'
-
-// Debug logging function
-function debugLog(message: string, data?: any) {
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[Login Debug] ${message}`, data ? data : '')
-  }
-}
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth'
+import { auth, db } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { data: session, status } = useSession()
-  const searchParams = useSearchParams()
-  const { isDarkMode } = useTheme()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null)
+  const [error, setError] = useState('')
+  const [resetSent, setResetSent] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [redirectUrl, setRedirectUrl] = useState('/dashboard')
 
-  // Log session status changes
   useEffect(() => {
-    debugLog('Session status changed:', { status, session })
-  }, [status, session])
-
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (status === 'authenticated') {
-      const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
-      debugLog('User authenticated, redirecting to:', callbackUrl)
-      router.push(callbackUrl)
+    // Get redirect URL from cookie if it exists
+    const cookies = document.cookie.split(';')
+    const redirectCookie = cookies.find(cookie => cookie.trim().startsWith('redirect-url='))
+    if (redirectCookie) {
+      const url = redirectCookie.split('=')[1]
+      setRedirectUrl(decodeURIComponent(url))
+      // Remove the cookie
+      document.cookie = 'redirect-url=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
     }
-  }, [status, router, searchParams])
-
-  const showToast = (message: string, type: ToastType) => {
-    debugLog('Showing toast:', { message, type })
-    setToast({ message, type })
-    // Auto-hide toast after 5 seconds
-    setTimeout(() => setToast(null), 5000)
-  }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    debugLog('Form submitted with:', { email })
     setIsLoading(true)
+    setError('')
 
     try {
-      const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
-      debugLog('Attempting sign in with callback URL:', callbackUrl)
+      console.log('Starting login process...')
       
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false,
-        callbackUrl,
+      // Sign in with Firebase
+      console.log('Attempting Firebase sign in...')
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      const user = userCredential.user
+      console.log('Firebase sign in successful:', { uid: user.uid, email: user.email })
+
+      // Get user data from Firestore
+      console.log('Fetching user data from Firestore...')
+      const userDoc = await getDoc(doc(db, 'users', user.uid))
+      const userData = userDoc.data()
+      console.log('Firestore user data:', userData)
+
+      if (!userData) {
+        throw new Error('User data not found in Firestore')
+      }
+
+      // Store user data in localStorage for client-side access
+      localStorage.setItem('user', JSON.stringify({
+        id: user.uid,
+        email: user.email,
+        name: user.displayName,
+        role: userData.role || 'rep'
+      }))
+
+      // Get the ID token and set it as a cookie
+      const idToken = await user.getIdToken()
+      console.log('Setting auth token cookie...');
+      document.cookie = `auth-token=${idToken}; path=/; secure; samesite=lax`
+      document.cookie = `user-role=${userData.role || 'rep'}; path=/; secure; samesite=lax`
+      console.log('Cookies after setting:', document.cookie);
+
+      console.log('Login successful, redirecting to:', redirectUrl)
+      // Wait for auth state to be updated
+      await new Promise((resolve) => {
+        console.log('Waiting for auth state update...');
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+          console.log('Auth state updated:', { user: user?.uid });
+          if (user) {
+            unsubscribe()
+            resolve(true)
+          }
+        })
       })
-
-      debugLog('Sign in result:', result)
-
-      if (result?.error) {
-        debugLog('Sign in error:', result.error)
-        showToast('Invalid email or password', 'error')
-        return
-      }
-
-      if (result?.url) {
-        debugLog('Redirecting to result URL:', result.url)
-        router.push(result.url)
-      } else {
-        debugLog('Redirecting to callback URL:', callbackUrl)
-        router.push(callbackUrl)
-      }
+      
+      console.log('Forcing hard navigation to:', redirectUrl);
+      // Force a hard navigation to ensure the middleware picks up the new auth state
+      window.location.href = redirectUrl
     } catch (error) {
-      debugLog('Login error:', error)
-      showToast('An error occurred during login', 'error')
+      console.error('Login error details:', error)
+      if (error instanceof Error) {
+        setError(error.message)
+      } else {
+        setError('An error occurred during login')
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Show loading state while checking session
-  if (status === 'loading') {
-    debugLog('Session loading, showing spinner')
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError('Please enter your email address')
+      return
+    }
+
+    setIsLoading(true)
+    setError('')
+
+    try {
+      console.log('Sending password reset email...')
+      await sendPasswordResetEmail(auth, email)
+      console.log('Password reset email sent successfully')
+      setResetSent(true)
+    } catch (error) {
+      console.error('Password reset error details:', error)
+      if (error instanceof Error) {
+        setError(error.message)
+      } else {
+        setError('Failed to send password reset email. Please check your email address.')
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-12 sm:px-6 lg:px-8 transition-colors duration-300">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-12 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white transition-colors duration-300">
-            Welcome to Trident Fleet
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Trident Fleet App
           </h1>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 transition-colors duration-300">
-            Sign in to manage your fleet operations
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            Sign in to your account
           </p>
         </div>
 
-        <Card className="bg-white dark:bg-[#1A1A1A] transition-colors duration-300">
+        <Card className="bg-white dark:bg-[#1A1A1A]">
           <div className="p-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                  Email address
-                </label>
-                <div className="mt-1">
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full"
-                    placeholder="Enter your email"
-                  />
-                </div>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full"
+                  placeholder="Email address"
+                />
               </div>
 
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                  Password
-                </label>
-                <div className="mt-1">
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="w-full"
-                    placeholder="Enter your password"
-                  />
-                </div>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full pr-12"
+                  placeholder="Password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 text-sm"
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
               </div>
 
-              {toast && (
-                <div className={`p-3 rounded-md ${
-                  toast.type === 'error' 
-                    ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-200'
-                    : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-200'
-                }`}>
-                  {toast.message}
+              {error && (
+                <div className="p-3 rounded-md bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-200">
+                  {error}
                 </div>
               )}
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading}
-              >
-                {isLoading ? 'Signing in...' : 'Sign in'}
-              </Button>
+              {resetSent && (
+                <div className="p-3 rounded-md bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-200">
+                  Password reset email sent. Please check your inbox.
+                </div>
+              )}
+
+              <div className="flex flex-col space-y-4">
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Signing in...' : 'Sign in'}
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="text-sm text-primary hover:text-primary/80 transition-colors"
+                  disabled={isLoading}
+                >
+                  Forgot Password?
+                </button>
+              </div>
             </form>
           </div>
         </Card>
 
-        <div className="text-center text-sm text-gray-600 dark:text-gray-400 transition-colors duration-300">
+        <div className="text-center text-sm text-gray-600 dark:text-gray-400">
           <p>Need help? Contact your administrator</p>
         </div>
       </div>

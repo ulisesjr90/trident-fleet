@@ -421,7 +421,6 @@ interface Customer {
 ### Authentication & User Management
 
 #### Shared Authentication Pages
-- **Login Page** (`/auth/login`)
   - Email/password authentication
   - Role-based redirection
   - Session management
@@ -2014,7 +2013,6 @@ interface VehicleEvent {
 
 ### Authentication Triggers
 
-#### Login Page (`/auth/login`)
 - **On Load**
   - Check for existing session
   - Redirect to dashboard if authenticated

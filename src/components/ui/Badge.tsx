@@ -1,26 +1,24 @@
-import { cn } from '@/lib/utils';
+import { getTypographyClass } from '@/lib/typography';
 
-interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: 'default' | 'secondary' | 'outline';
+interface BadgeProps {
+  children: React.ReactNode;
+  variant?: 'default' | 'success' | 'error' | 'warning';
+  className?: string;
 }
 
-export function Badge({
-  className,
-  variant = 'default',
-  ...props
-}: BadgeProps) {
+export function Badge({ children, variant = 'default', className = '' }: BadgeProps) {
+  const variantStyles = {
+    default: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+    success: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
+    error: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
+    warning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
+  };
+
   return (
     <span
-      className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
-        {
-          'bg-primary text-primary-foreground hover:bg-primary/80': variant === 'default',
-          'bg-secondary text-secondary-foreground hover:bg-secondary/80': variant === 'secondary',
-          'border border-input bg-background hover:bg-accent hover:text-accent-foreground': variant === 'outline',
-        },
-        className
-      )}
-      {...props}
-    />
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 ${getTypographyClass('body')} ${variantStyles[variant]} ${className}`}
+    >
+      {children}
+    </span>
   );
 } 

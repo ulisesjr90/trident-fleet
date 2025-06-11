@@ -1,36 +1,31 @@
-import { useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { getTypographyClass } from '@/lib/typography';
 
 interface CollapsibleSectionProps {
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
   defaultOpen?: boolean;
-  className?: string;
 }
 
-export function CollapsibleSection({
-  title,
-  children,
-  defaultOpen = false,
-  className = ''
-}: CollapsibleSectionProps) {
+export function CollapsibleSection({ title, children, defaultOpen = false }: CollapsibleSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className={`bg-white dark:bg-[#1f2937] rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 ${className}`}>
+    <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-6 py-4 flex items-center justify-between text-left"
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
       >
-        <h2 className="text-lg font-semibold">{title}</h2>
+        <h2 className={getTypographyClass('header')}>{title}</h2>
         <ChevronDown
-          className={`w-5 h-5 text-gray-500 transition-transform ${
+          className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
             isOpen ? 'transform rotate-180' : ''
           }`}
         />
       </button>
       {isOpen && (
-        <div className="px-6 pb-6">
+        <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
           {children}
         </div>
       )}

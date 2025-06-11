@@ -1,22 +1,14 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
-import { SessionProvider } from '@/components/providers/SessionProvider'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
+import { AuthProvider } from '@/components/providers/AuthProvider'
 import './globals.css'
 
-const inter = Inter({ 
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter',
-  preload: true,
-})
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Trident Fleet App',
-  description: 'Fleet management application for small-scale operations',
-  icons: {
-    icon: '/favicon.ico',
-  },
+  description: 'Fleet management application for Trident',
 }
 
 export default function RootLayout({
@@ -26,12 +18,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} ${inter.className} min-h-screen antialiased bg-white dark:bg-gray-900 text-gray-900 dark:text-white`}>
-        <SessionProvider>
-          <ThemeProvider>
-          {children}
-          </ThemeProvider>
-        </SessionProvider>
+      <body className={inter.className}>
+        <ThemeProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

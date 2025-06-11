@@ -1,119 +1,152 @@
 import { useState } from 'react';
-import { useSession } from 'next-auth/react';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { Modal } from '@/components/ui/Modal';
+import { X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { useCustomerOperations } from '@/hooks/useCustomerOperations';
+import { getTypographyClass } from '@/lib/typography';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 interface AddCustomerModalProps {
+  isOpen: boolean;
   onClose: () => void;
-  onSuccess: (customer: any) => void;
+  onSuccess?: (customer: { id: string; name: string }) => void;
 }
 
-export function AddCustomerModal({ onClose, onSuccess }: AddCustomerModalProps) {
-  const { data: session } = useSession();
+export function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCustomerModalProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [address, setAddress] = useState('');
+  const [notes, setNotes] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const { addCustomer, isLoading, error } = useCustomerOperations();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!session?.user?.id) {
-      setError('Please sign in to add customers');
+    setFormError(null);
+
+    if (!name.trim()) {
+      setFormError('Name is required');
       return;
     }
 
     try {
-      setLoading(true);
-      setError(null);
-
-      const customerData = {
+      const customerId = await addCustomer({
         name: name.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        primaryOwnerId: session.user.id,
-        additionalOwnerIds: [],
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
-
-      const docRef = await addDoc(collection(db, 'customers'), customerData);
-      
-      onSuccess({
-        id: docRef.id,
-        ...customerData
+        email: email.trim() || null,
+        phone: phone.trim() || null,
+        address: address.trim() || null,
+        notes: notes.trim() || null,
       });
-    } catch (err: any) {
+
+      // Reset form
+      setName('');
+      setEmail('');
+      setPhone('');
+      setAddress('');
+      setNotes('');
+      setFormError(null);
+
+      onSuccess?.({ id: customerId, name: name.trim() });
+      onClose();
+    } catch (err) {
       console.error('Error adding customer:', err);
-      if (err.code === 'permission-denied') {
-        setError('You do not have permission to add customers. Please contact your administrator.');
-      } else {
-        setError('Failed to add customer. Please try again.');
-      }
-    } finally {
-      setLoading(false);
+      setFormError('Failed to add customer. Please try again.');
     }
   };
 
   return (
-    <Modal title="Add Customer" onClose={onClose}>
-      <div className="p-4">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
-            <div className="form-group">
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                placeholder="Customer's full name"
-              />
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md mx-auto my-auto">
+        <DialogHeader>
+          <DialogTitle>Add New Customer</DialogTitle>
+        </DialogHeader>
+        <div className="p-3 space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+          {(error || formError) && (
+            <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-2 rounded-md">
+              <p className={getTypographyClass('body')}>
+                {formError || error?.message}
+              </p>
             </div>
-            
-            <div className="form-group">
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="customer@example.com"
-              />
-            </div>
-            
-            <div className="form-group">
-              <Input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="(555) 555-5555"
-              />
-            </div>
-          </div>
-
-          {error && (
-            <div className="text-red-500 text-sm">{error}</div>
           )}
 
-          <div className="flex justify-end gap-3 pt-2">
-            <Button
-              type="button"
-              variant="accent"
-              onClick={onClose}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={loading || !name.trim()}
-            >
-              {loading ? 'Adding...' : 'Add Customer'}
-            </Button>
+          <div className="space-y-4">
+        <div>
+          <Input
+            id="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+                placeholder="Customer Name *"
+            required
+                  autoFocus
+          />
+        </div>
+
+        <div>
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email Address"
+          />
+        </div>
+
+        <div>
+          <Input
+            id="phone"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+                placeholder="Phone Number"
+              />
+            </div>
+
+            <div>
+              <Input
+                id="address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Address"
+              />
+            </div>
+
+            <div>
+              <Input
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Notes"
+          />
+        </div>
           </div>
-        </form>
-      </div>
-    </Modal>
+          </form>
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+              disabled={isLoading}
+            onClick={handleSubmit}
+          >
+              {isLoading ? 'Adding...' : 'Add Customer'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 } 

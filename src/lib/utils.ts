@@ -20,3 +20,7 @@ export function formatMileage(mileage: number): string {
   if (!mileage) return '0 miles';
   return new Intl.NumberFormat('en-US').format(mileage) + ' miles';
 } 
+
+export function formatTimestamp(timestamp: Date): string {
+  return new Date(timestamp).toLocaleString();
+} 
