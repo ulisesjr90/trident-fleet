@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #0066CC;
+  --accent: #FFD700;
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --error: #EF4444;
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 0 0% 100%;
+  }
+
+  body {
+    @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-white;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-white h-10 px-6 py-2 rounded-lg hover:bg-primary/90 transition-colors;
+  }
+  
+  .btn-accent {
+    @apply bg-accent text-gray-900 h-10 px-6 py-2 rounded-lg hover:bg-accent/90 transition-colors;
+  }
+  
+  .btn-danger {
+    @apply bg-error text-white h-10 px-6 py-2 rounded-lg hover:bg-error/90 transition-colors;
+  }
+  
+  .input-field {
+    @apply h-10 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 w-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white;
+  }
+  
+  .form-group {
+    @apply mb-6;
+  }
+  
+  .form-label {
+    @apply text-sm font-medium mb-2 block text-gray-900 dark:text-white;
+  }
+} 
