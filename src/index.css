@@ -1,0 +1,17 @@
+/* Base styles */
+html {
+  font-family: 'Inter', sans-serif;
+}
+
+/* Component styles */
+.rounded-component {
+  border-radius: 0.5rem;
+}
+
+.shadow-component {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.rounded-badge {
+  border-radius: 9999px;
+} 
